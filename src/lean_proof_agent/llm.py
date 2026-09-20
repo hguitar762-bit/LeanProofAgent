@@ -5,14 +5,16 @@ from __future__ import annotations
 from typing import Protocol
 import re
 
-from .models import reject_unsafe_lean
+from .models import GenerationResult, reject_unsafe_lean
 
 
 class LLMBackend(Protocol):
     """Minimal interface any synchronous text-generation backend can implement."""
 
-    def generate(self, *, system_prompt: str, user_prompt: str) -> str:
-        """Return a candidate Lean proof as text."""
+    def generate(
+        self, *, system_prompt: str, user_prompt: str
+    ) -> str | GenerationResult:
+        """Return proof text, optionally with provider-reported metadata."""
 
 
 _FENCE_RE = re.compile(r"^```(?:lean)?\s*\n?(.*?)\n?```$", re.DOTALL | re.IGNORECASE)

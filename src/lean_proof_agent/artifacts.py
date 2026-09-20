@@ -24,6 +24,7 @@ def write_problem(run_dir: Path, problem: LeanProblem, max_attempts: int) -> Non
     payload = {
         "name": problem.name,
         "description": problem.description,
+        "category": problem.category,
         "imports": list(problem.imports),
         "theorem": problem.theorem,
         "max_attempts": max_attempts,
@@ -37,6 +38,8 @@ def write_attempt(run_dir: Path, record: AttemptRecord) -> None:
         "attempt": record.number,
         "proof": record.proof,
         "source_file": record.source_path.name,
+        "generation_seconds": record.generation_seconds,
+        "token_usage": asdict(record.token_usage) if record.token_usage else None,
         "verification": verification,
     }
     _write_json(run_dir / f"attempt_{record.number:02d}.json", payload)
@@ -48,6 +51,7 @@ def write_summary(result: RunResult) -> None:
         "success": result.success,
         "attempt_count": len(result.attempts),
         "final_proof": result.final_proof,
+        "token_usage": asdict(result.token_usage) if result.token_usage else None,
         "attempt_files": [f"attempt_{item.number:02d}.json" for item in result.attempts],
     }
     _write_json(result.run_dir / "summary.json", payload)

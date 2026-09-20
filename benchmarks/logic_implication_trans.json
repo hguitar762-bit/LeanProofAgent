@@ -1,0 +1,7 @@
+{
+  "name": "logic_implication_trans",
+  "category": "logic",
+  "description": "Implication is transitive.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem logic_implication_trans_benchmark {P Q R : Prop} (hpq : P → Q) (hqr : Q → R) : P → R"
+}

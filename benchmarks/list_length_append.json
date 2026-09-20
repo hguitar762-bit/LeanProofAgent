@@ -1,0 +1,7 @@
+{
+  "name": "list_length_append",
+  "category": "lists",
+  "description": "The length of an append is the sum of the lengths.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem list_length_append_benchmark {α : Type} (xs ys : List α) : (xs ++ ys).length = xs.length + ys.length"
+}

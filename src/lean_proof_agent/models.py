@@ -34,10 +34,13 @@ class LeanProblem:
     theorem: str
     imports: tuple[str, ...] = ("Mathlib",)
     description: str = ""
+    category: str = "uncategorized"
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("problem name must not be empty")
+        if not self.category.strip():
+            raise ValueError("problem category must not be empty")
         theorem = self.theorem.strip()
         if not _THEOREM_RE.match(theorem):
             raise ValueError("theorem must start with 'theorem' or 'example'")
@@ -84,6 +87,34 @@ class VerificationResult:
 
 
 @dataclass(frozen=True, slots=True)
+class TokenUsage:
+    """Token counts reported by an LLM provider, when available."""
+
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+    def __post_init__(self) -> None:
+        if min(self.input_tokens, self.output_tokens, self.total_tokens) < 0:
+            raise ValueError("token counts must be non-negative")
+
+    def __add__(self, other: TokenUsage) -> TokenUsage:
+        return TokenUsage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            total_tokens=self.total_tokens + other.total_tokens,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationResult:
+    """Generated proof text with optional provider-reported usage."""
+
+    text: str
+    token_usage: TokenUsage | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class AttemptRecord:
     """Persisted information for one generation/verification attempt."""
 
@@ -91,6 +122,8 @@ class AttemptRecord:
     proof: str
     source_path: Path
     verification: VerificationResult
+    generation_seconds: float = 0.0
+    token_usage: TokenUsage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,3 +140,13 @@ class RunResult:
         if not self.success or not self.attempts:
             return None
         return self.attempts[-1].proof
+
+    @property
+    def token_usage(self) -> TokenUsage | None:
+        usages = [item.token_usage for item in self.attempts if item.token_usage]
+        if not usages:
+            return None
+        total = TokenUsage(0, 0, 0)
+        for usage in usages:
+            total += usage
+        return total

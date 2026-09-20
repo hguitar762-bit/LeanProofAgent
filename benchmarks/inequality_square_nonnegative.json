@@ -1,0 +1,7 @@
+{
+  "name": "inequality_square_nonnegative",
+  "category": "inequalities",
+  "description": "The square of a real number is nonnegative.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem inequality_square_nonnegative_benchmark (x : ℝ) : 0 ≤ x ^ 2"
+}

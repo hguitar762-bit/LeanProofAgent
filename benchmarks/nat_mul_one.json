@@ -1,0 +1,7 @@
+{
+  "name": "nat_mul_one",
+  "category": "arithmetic",
+  "description": "One is a right identity for natural-number multiplication.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem nat_mul_one_benchmark (n : ℕ) : n * 1 = n"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "int_sub_self",
+  "category": "algebra",
+  "description": "Subtracting an integer from itself gives zero.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem int_sub_self_benchmark (x : ℤ) : x - x = 0"
+}

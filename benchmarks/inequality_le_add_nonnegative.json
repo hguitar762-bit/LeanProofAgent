@@ -1,0 +1,7 @@
+{
+  "name": "inequality_le_add_nonnegative",
+  "category": "inequalities",
+  "description": "Adding a nonnegative real does not decrease a value.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem inequality_le_add_nonnegative_benchmark (a b : ℝ) (hb : 0 ≤ b) : a ≤ a + b"
+}

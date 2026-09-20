@@ -1,0 +1,7 @@
+{
+  "name": "int_add_neg",
+  "category": "algebra",
+  "description": "An integer plus its additive inverse is zero.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem int_add_neg_benchmark (x : ℤ) : x + (-x) = 0"
+}

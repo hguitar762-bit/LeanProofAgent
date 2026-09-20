@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from lean_proof_agent import LeanProblem, LeanVerifier, ProofAgent
+from lean_proof_agent import EvaluationRunner, LeanProblem, LeanVerifier, ProofAgent
+from lean_proof_agent.offline_backend import OfflineMockBackend
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,3 +58,24 @@ def test_agent_repairs_using_real_lean_feedback(tmp_path: Path) -> None:
     assert (result.run_dir / "attempt_01.json").is_file()
     assert (result.run_dir / "attempt_02.json").is_file()
     assert (result.run_dir / "summary.json").is_file()
+
+
+@pytest.mark.lean
+def test_evaluation_uses_real_lean_as_success_standard(tmp_path: Path) -> None:
+    result = EvaluationRunner(
+        OfflineMockBackend(),
+        LeanVerifier(ROOT),
+        max_attempts=1,
+        output_root=tmp_path / "evaluations",
+    ).run(
+        (
+            LeanProblem(
+                "evaluation_real_lean",
+                "theorem evaluation_real_lean (n : ℕ) : n + 0 = n",
+                category="arithmetic",
+            ),
+        )
+    )
+    assert result.verified_problems == 1
+    assert result.problems[0].verified
+    assert (result.evaluation_dir / "evaluation.json").is_file()

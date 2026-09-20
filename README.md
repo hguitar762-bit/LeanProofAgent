@@ -1,9 +1,10 @@
 # LeanProofAgent
 
-LeanProofAgent is a small, executable MVP for **kernel-checked mathematical
+LeanProofAgent is a small, executable framework for **kernel-checked mathematical
 reasoning**. An LLM proposes a Lean 4 proof; Lean checks it against Mathlib. If
 Lean rejects the proof, the agent sends the exact compiler feedback back to the
-LLM and tries again, up to a fixed limit.
+LLM and tries again, up to a fixed limit. Version 0.2 adds sequential benchmark
+evaluation without changing that trusted proof loop.
 
 ```text
 theorem statement
@@ -20,7 +21,7 @@ that the generated `.lean` file was accepted by a real `lake env lean` process
 with exit code 0. Each attempted proof, command result, stdout, stderr, duration,
 and the final summary are saved as run artifacts.
 
-## MVP scope
+## Scope
 
 Included:
 
@@ -32,6 +33,10 @@ Included:
   contain a proof body.
 - A CLI, theorem-only benchmarks, an offline mock repair demo, pytest coverage,
   and GitHub Actions CI.
+- A failure-isolated evaluation runner with JSON results, Markdown summaries,
+  latency/attempt metrics, and optional provider-reported token usage.
+- Twenty theorem-only benchmarks across arithmetic, algebra, logic, lists,
+  sets, and inequalities.
 
 Deliberately not included: a web UI, database, RAG, multi-agent orchestration,
 or benchmark-specific proof lookup.
@@ -44,10 +49,12 @@ src/lean_proof_agent/
 ├── verifier.py         subprocess boundary for `lake env lean`
 ├── llm.py              backend protocol and output normalization
 ├── openai_backend.py   OpenAI Responses API adapter
+├── offline_backend.py  generic offline tactic for plumbing checks only
 ├── prompts.py          initial and compiler-repair prompts
 ├── artifacts.py        per-attempt Lean and JSON records
 ├── models.py           typed domain objects and safety checks
 ├── benchmarks.py       theorem-only benchmark loader
+├── evaluation.py       sequential runner, metrics, JSON, and Markdown
 └── cli.py              `lean-proof` command
 
 benchmarks/             statements and metadata, never solutions
@@ -60,8 +67,13 @@ only needs to implement:
 
 ```python
 class LLMBackend(Protocol):
-    def generate(self, *, system_prompt: str, user_prompt: str) -> str: ...
+    def generate(
+        self, *, system_prompt: str, user_prompt: str
+    ) -> str | GenerationResult: ...
 ```
+
+Returning a plain string remains supported. `GenerationResult` adds optional
+provider-reported token counts without coupling the proof loop to OpenAI.
 
 ## Prerequisites
 
@@ -170,6 +182,85 @@ lean-proof solve --problem path/to/problem.json --artifacts-dir runs
 The declaration must not include `:=` or a proof. That prevents a benchmark
 file from smuggling in its own answer.
 
+## Evaluation
+
+Evaluate all bundled benchmarks with OpenAI:
+
+```bash
+lean-proof evaluate --benchmark benchmarks --max-attempts 3
+```
+
+`--benchmark` accepts either a theorem JSON file or a directory and can be
+repeated. Omitting it evaluates the bundled suite. Results are sequential: each
+theorem gets its own `ProofAgent` run, and a provider exception or failed proof
+is recorded without aborting later theorems.
+
+When no API key is available, validate the complete evaluation and real-Lean
+pipeline with the offline backend:
+
+```bash
+lean-proof evaluate \
+  --benchmark benchmarks/add_zero.json \
+  --backend mock \
+  --max-attempts 1
+```
+
+The mock backend always emits the same generic `simp` tactic. It is useful for
+plumbing tests, is not an LLM performance measurement, and contains no
+benchmark-specific solutions.
+
+Each evaluation writes:
+
+```text
+evaluations/20260920T120000Z-evaluation-a1b2c3d4/
+├── evaluation.json       machine-readable aggregate and per-theorem results
+├── summary.md            concise metrics and status table
+└── problems/             normal ProofAgent artifacts for every started theorem
+```
+
+### Metric definitions
+
+- **Total problems:** number of loaded theorem declarations.
+- **Verified problems:** problems whose final generated `.lean` file exited
+  successfully under `lake env lean`.
+- **Verified success rate:** `verified / total`; stored as a value from 0 to 1
+  in JSON and rendered as a percentage.
+- **Average/median attempts:** candidate proofs completed per problem. A provider
+  failure before producing a candidate counts as zero attempts.
+- **Average latency:** mean wall time per problem, including model generation,
+  Lean verification, retries, and artifact writes.
+- **Total latency:** sum of per-problem wall times; execution is sequential.
+- **Token usage:** sums only counts explicitly returned by the provider. The
+  OpenAI Responses API exposes optional input, output, and total token counts;
+  missing usage stays `null`/`unavailable`, and the report states how many
+  attempts supplied usage. See the
+  [official Responses API reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create).
+
+Every theorem row records `verified`, `attempts`, `latency_seconds`, the final
+proof when successful, the final compiler/provider failure when unsuccessful,
+optional token usage, and the associated ProofAgent artifact directory.
+The top-level result also records the backend, model, and maximum attempt limit
+needed to interpret or compare a run.
+
+Illustrative summary format (not a claimed run):
+
+```text
+LeanProofAgent Evaluation
+Problems: 20
+Verified: 16
+Success rate: 80.0%
+Average attempts: 1.80
+Median attempts: 1
+Average latency: 4.20s
+Total latency: 84.00s
+```
+
+```text
+| Problem       | Category   | Status   | Attempts | Latency |
+| add_zero      | arithmetic | verified |        1 |   3.80s |
+| set_union_comm| sets       | failed   |        3 |   6.10s |
+```
+
 ## Offline repair demo
 
 The demo spends no API credits. Its mock backend deliberately emits an invalid
@@ -199,8 +290,9 @@ runs/20260920T120000Z-add_zero-a1b2c3d4/
 ```
 
 An attempt JSON records the extracted proof, exact source filename, command,
-exit code, stdout, stderr, timeout flag, and elapsed time. `summary.json` records
-success/failure, total attempts, and the final verified proof when one exists.
+exit code, stdout, stderr, timeout flag, generation/verification elapsed time,
+and optional provider token usage. `summary.json` records success/failure, total
+attempts, aggregate reported usage, and the final verified proof when one exists.
 `runs/` is ignored by Git because it can contain model output and large logs.
 
 ## Verification and safety boundary
@@ -235,25 +327,28 @@ real Lean to establish all of the following:
 5. both attempts and the run summary are persisted.
 
 CI performs `lake update`, downloads the Mathlib cache, installs Python 3.11,
-runs pytest, and executes the offline repair demo.
+runs pytest, and executes the offline repair demo. Evaluation tests use mock
+backends and never call a paid API; a Lean-marked integration test confirms that
+evaluation success still comes from the real compiler.
 
 ## Known limitations
 
 - The MVP handles one theorem declaration at a time and expects imports plus a
   declaration without a proof body; it is not a general Lean project editor.
 - Generation is synchronous and uses a simple full-error retry prompt. There is
-  no token budgeting, streaming, parallel search, or proof minimization.
+  no streaming, parallel search, or proof minimization.
 - Lexical blocking covers explicit proof holes and axiom declarations, but the
   main trust boundary is still Lean's kernel and the exact imported environment.
 - OpenAI model availability, latency, and cost depend on the caller's account.
 - Artifact writes are local files; there is no retention policy or shared store.
+- The offline mock is only a workflow check. Its success rate must not be
+  compared with a model evaluation.
 
 ## Best next step
 
-Add a small evaluation runner that executes every theorem-only benchmark across
-configurable model/backend settings and reports verified success rate, attempts,
-latency, and token usage. That would measure the agent without expanding the
-trusted verification core or adding unrelated product surface.
+Add evaluation-to-evaluation comparison: load two saved `evaluation.json` files
+and report metric deltas and per-theorem regressions. This keeps runs
+reproducible without adding a database or changing the proof-search strategy.
 
 ## License
 

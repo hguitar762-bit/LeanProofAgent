@@ -1,0 +1,7 @@
+{
+  "name": "logic_or_comm",
+  "category": "logic",
+  "description": "Disjunction is commutative.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem logic_or_comm_benchmark {P Q : Prop} : P ∨ Q ↔ Q ∨ P"
+}

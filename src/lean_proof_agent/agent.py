@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Protocol
 
 from .artifacts import create_run_dir, write_attempt, write_problem, write_summary
 from .llm import LLMBackend, normalize_proof
 from .models import (
     AttemptRecord,
+    GenerationResult,
     LeanProblem,
     RunResult,
     VerificationResult,
@@ -55,10 +57,20 @@ class ProofAgent:
                 previous_proof=previous_proof,
                 compiler_error=compiler_error,
             )
-            raw_response = self.backend.generate(
+            generation_started = time.monotonic()
+            generated = self.backend.generate(
                 system_prompt=SYSTEM_PROMPT,
                 user_prompt=prompt,
             )
+            generation_seconds = time.monotonic() - generation_started
+            if isinstance(generated, GenerationResult):
+                raw_response = generated.text
+                token_usage = generated.token_usage
+            elif isinstance(generated, str):
+                raw_response = generated
+                token_usage = None
+            else:
+                raise TypeError("LLM backend must return str or GenerationResult")
             try:
                 proof = normalize_proof(raw_response)
                 source_text = problem.source_with(proof)
@@ -81,7 +93,14 @@ class ProofAgent:
                 source_path.write_text(source_text, encoding="utf-8")
                 verification = self.verifier.verify(source_path)
 
-            record = AttemptRecord(number, proof, source_path, verification)
+            record = AttemptRecord(
+                number,
+                proof,
+                source_path,
+                verification,
+                generation_seconds,
+                token_usage,
+            )
             records.append(record)
             write_attempt(run_dir, record)
             if verification.success:

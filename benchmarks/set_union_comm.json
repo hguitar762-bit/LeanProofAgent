@@ -1,0 +1,7 @@
+{
+  "name": "set_union_comm",
+  "category": "sets",
+  "description": "Set union is commutative.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem set_union_comm_benchmark {α : Type} (s t : Set α) : s ∪ t = t ∪ s"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "set_inter_self",
+  "category": "sets",
+  "description": "Intersecting a set with itself changes nothing.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem set_inter_self_benchmark {α : Type} (s : Set α) : s ∩ s = s"
+}

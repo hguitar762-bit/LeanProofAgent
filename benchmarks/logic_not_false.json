@@ -1,0 +1,7 @@
+{
+  "name": "logic_not_false",
+  "category": "logic",
+  "description": "False is not true.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem logic_not_false_benchmark : ¬ False"
+}

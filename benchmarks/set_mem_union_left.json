@@ -1,0 +1,7 @@
+{
+  "name": "set_mem_union_left",
+  "category": "sets",
+  "description": "Membership in the left set implies membership in the union.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem set_mem_union_left_benchmark {α : Type} (x : α) (s t : Set α) (h : x ∈ s) : x ∈ s ∪ t"
+}

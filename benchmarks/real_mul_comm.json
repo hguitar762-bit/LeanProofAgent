@@ -1,0 +1,7 @@
+{
+  "name": "real_mul_comm",
+  "category": "algebra",
+  "description": "Real multiplication is commutative.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem real_mul_comm_benchmark (x y : ℝ) : x * y = y * x"
+}

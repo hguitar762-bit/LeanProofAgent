@@ -1,0 +1,7 @@
+{
+  "name": "logic_and_swap",
+  "category": "logic",
+  "description": "Conjunction can be swapped.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem logic_and_swap_benchmark {P Q : Prop} (h : P ∧ Q) : Q ∧ P"
+}

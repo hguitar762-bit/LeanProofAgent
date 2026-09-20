@@ -1,0 +1,7 @@
+{
+  "name": "inequality_nat_zero_le",
+  "category": "inequalities",
+  "description": "Zero is below every natural number.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem inequality_nat_zero_le_benchmark (n : ℕ) : 0 ≤ n"
+}

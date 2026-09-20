@@ -8,8 +8,16 @@ from pathlib import Path
 import sys
 
 from .agent import ProofAgent
-from .benchmarks import list_benchmarks, load_benchmark, load_problem_file
+from .benchmarks import (
+    list_benchmarks,
+    load_benchmark,
+    load_benchmark_paths,
+    load_problem_file,
+)
+from .evaluation import EvaluationRunner, render_markdown
+from .llm import LLMBackend
 from .models import LeanProblem
+from .offline_backend import OfflineMockBackend
 from .openai_backend import OpenAIBackend
 from .verifier import LeanVerifier
 
@@ -40,6 +48,32 @@ def build_parser() -> argparse.ArgumentParser:
     solve.add_argument("--project-root", type=Path, default=Path.cwd())
     solve.add_argument("--timeout", type=float, default=120.0)
     solve.set_defaults(handler=_solve)
+
+    evaluate = subcommands.add_parser(
+        "evaluate", help="run a theorem benchmark suite and aggregate metrics"
+    )
+    evaluate.add_argument(
+        "--benchmark",
+        action="append",
+        type=Path,
+        help="benchmark JSON file or directory; repeatable (default: bundled suite)",
+    )
+    evaluate.add_argument(
+        "--backend",
+        choices=("openai", "mock"),
+        default="openai",
+        help="mock is an offline plumbing check using one generic tactic",
+    )
+    evaluate.add_argument(
+        "--model",
+        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
+        help="OpenAI model (ignored by the mock backend)",
+    )
+    evaluate.add_argument("--max-attempts", type=int, default=3)
+    evaluate.add_argument("--output-dir", type=Path, default=Path("evaluations"))
+    evaluate.add_argument("--project-root", type=Path, default=Path.cwd())
+    evaluate.add_argument("--timeout", type=float, default=120.0)
+    evaluate.set_defaults(handler=_evaluate)
     return parser
 
 
@@ -97,6 +131,34 @@ def _solve(args: argparse.Namespace) -> int:
         print("Final Lean feedback:", file=sys.stderr)
         print(result.attempts[-1].verification.compiler_feedback, file=sys.stderr)
     return 0 if result.success else 1
+
+
+def _evaluate(args: argparse.Namespace) -> int:
+    problems = (
+        load_benchmark_paths(args.benchmark)
+        if args.benchmark
+        else list_benchmarks()
+    )
+    backend = _evaluation_backend(args.backend, args.model)
+    verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
+    result = EvaluationRunner(
+        backend,
+        verifier,
+        max_attempts=args.max_attempts,
+        output_root=args.output_dir,
+        backend_name=args.backend,
+        model=args.model if args.backend == "openai" else None,
+    ).run(problems)
+    print(render_markdown(result), end="")
+    print(f"JSON: {result.evaluation_dir / 'evaluation.json'}")
+    print(f"Markdown: {result.evaluation_dir / 'summary.md'}")
+    return 0
+
+
+def _evaluation_backend(name: str, model: str) -> LLMBackend:
+    if name == "mock":
+        return OfflineMockBackend()
+    return OpenAIBackend(model)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 {
   "name": "list_reverse_reverse",
+  "category": "lists",
   "description": "Reversing a list twice returns the original list.",
   "imports": ["Mathlib"],
   "theorem": "theorem reverse_reverse_benchmark {α : Type} (xs : List α) : xs.reverse.reverse = xs"

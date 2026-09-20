@@ -1,0 +1,7 @@
+{
+  "name": "list_append_nil",
+  "category": "lists",
+  "description": "Appending the empty list on the right changes nothing.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem list_append_nil_benchmark {α : Type} (xs : List α) : xs ++ [] = xs"
+}

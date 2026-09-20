@@ -1,0 +1,7 @@
+{
+  "name": "nat_add_comm",
+  "category": "arithmetic",
+  "description": "Natural-number addition is commutative.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem nat_add_comm_benchmark (a b : ℕ) : a + b = b + a"
+}
