@@ -1,0 +1,6 @@
+{
+  "name": "even_double",
+  "description": "Twice a natural number is even.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem even_double_benchmark (n : ℕ) : Even (2 * n)"
+}

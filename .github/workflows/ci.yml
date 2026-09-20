@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lean via Elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Fetch Mathlib and compiled cache
+        run: |
+          lake update
+          lake exe cache get
+      - name: Install Python package
+        run: python -m pip install -e ".[dev,openai]"
+      - name: Test
+        run: pytest
+      - name: Offline repair demo
+        run: python examples/mock_repair_demo.py

@@ -1,0 +1,6 @@
+{
+  "name": "add_zero",
+  "description": "Natural-number addition has zero as a right identity.",
+  "imports": ["Mathlib"],
+  "theorem": "theorem add_zero_benchmark (n : ℕ) : n + 0 = n"
+}

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lean-proof-agent"
+version = "0.1.0"
+description = "A minimal LLM proof-repair loop verified by Lean 4 and Mathlib"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "LeanProofAgent contributors" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+openai = ["openai>=2.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+lean-proof = "lean_proof_agent.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lean_proof_agent"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"benchmarks" = "lean_proof_agent/benchmarks"
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+markers = [
+  "lean: requires a working Lean 4 + Mathlib toolchain",
+]
