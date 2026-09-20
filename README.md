@@ -3,8 +3,8 @@
 LeanProofAgent is a small, executable framework for **kernel-checked mathematical
 reasoning**. An LLM proposes a Lean 4 proof; Lean checks it against Mathlib. If
 Lean rejects the proof, the agent sends the exact compiler feedback back to the
-LLM and tries again, up to a fixed limit. Version 0.2 adds sequential benchmark
-evaluation without changing that trusted proof loop.
+LLM and tries again, up to a fixed limit. Version 0.3 adds evaluation comparison
+and regression analysis without changing that trusted proof loop.
 
 ```text
 theorem statement
@@ -35,6 +35,8 @@ Included:
   and GitHub Actions CI.
 - A failure-isolated evaluation runner with JSON results, Markdown summaries,
   latency/attempt metrics, and optional provider-reported token usage.
+- Saved-evaluation comparison with aggregate deltas, benchmark coverage changes,
+  and per-theorem regression analysis.
 - Twenty theorem-only benchmarks across arithmetic, algebra, logic, lists,
   sets, and inequalities.
 
@@ -55,6 +57,7 @@ src/lean_proof_agent/
 ├── models.py           typed domain objects and safety checks
 ├── benchmarks.py       theorem-only benchmark loader
 ├── evaluation.py       sequential runner, metrics, JSON, and Markdown
+├── comparison.py       saved-run deltas and per-theorem regressions
 └── cli.py              `lean-proof` command
 
 benchmarks/             statements and metadata, never solutions
@@ -242,6 +245,50 @@ optional token usage, and the associated ProofAgent artifact directory.
 The top-level result also records the backend, model, and maximum attempt limit
 needed to interpret or compare a run.
 
+## Compare Evaluations
+
+Compare any two saved evaluation results, for example runs made with different
+models, prompts, maximum attempt limits, or code revisions:
+
+```bash
+lean-proof compare \
+  eval_a/evaluation.json \
+  eval_b/evaluation.json \
+  --json
+```
+
+The command prints a terminal summary and writes
+`comparisons/<timestamp>-comparison-<id>/comparison.md`. Passing `--json` also
+writes `comparison.json`; omit it when only the human-readable report is
+needed. Use `--output-dir <path>` to choose another report root.
+
+The report includes overall success-rate, verified-count, average-attempt,
+average-latency, and token-usage deltas (B minus A), followed by newly solved
+theorems, regressions, still-failed theorems, and per-theorem attempt/latency
+changes. Token deltas are reported only when both evaluations contain token
+usage. Any other missing metric is shown as `unavailable` rather than inferred.
+
+Theorem names are the comparison key. When suites differ, regression statuses
+are computed only for the intersection; unmatched names are listed separately
+as `only in A` or `only in B`. Overall metric deltas still describe the two
+complete saved runs, so the coverage counts should be considered when reading
+them.
+
+Illustrative terminal output:
+
+```text
+LeanProofAgent Evaluation Comparison
+Coverage: 18 common, 2 only in A, 1 only in B
+Success rate delta: +5.0 pp
+Verified problems delta: +1
+Average attempts delta: -0.20
+Average latency delta: -0.45s
+Token usage delta: unavailable
+Newly solved (2): logic_or_comm, set_union_comm
+Regressions (1): list_reverse_reverse
+Still failed (3): theorem_a, theorem_b, theorem_c
+```
+
 Illustrative summary format (not a claimed run):
 
 ```text
@@ -341,14 +388,16 @@ evaluation success still comes from the real compiler.
   main trust boundary is still Lean's kernel and the exact imported environment.
 - OpenAI model availability, latency, and cost depend on the caller's account.
 - Artifact writes are local files; there is no retention policy or shared store.
+- Comparisons match theorems by their saved names; renames appear as suite
+  additions/removals rather than the same theorem.
 - The offline mock is only a workflow check. Its success rate must not be
   compared with a model evaluation.
 
 ## Best next step
 
-Add evaluation-to-evaluation comparison: load two saved `evaluation.json` files
-and report metric deltas and per-theorem regressions. This keeps runs
-reproducible without adding a database or changing the proof-search strategy.
+Add reproducible prompt/model metadata (for example a user-supplied run label or
+prompt hash) to evaluation artifacts so comparison reports can identify the
+exact experimental configuration without adding a database.
 
 ## License
 

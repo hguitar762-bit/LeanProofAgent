@@ -1,6 +1,7 @@
 """LeanProofAgent public API."""
 
 from .agent import ProofAgent
+from .comparison import ComparisonResult, compare_evaluations
 from .evaluation import EvaluationResult, EvaluationRunner
 from .llm import LLMBackend
 from .models import (
@@ -15,6 +16,7 @@ from .verifier import LeanVerifier
 
 __all__ = [
     "AttemptRecord",
+    "ComparisonResult",
     "EvaluationResult",
     "EvaluationRunner",
     "GenerationResult",
@@ -25,4 +27,5 @@ __all__ = [
     "RunResult",
     "TokenUsage",
     "VerificationResult",
+    "compare_evaluations",
 ]

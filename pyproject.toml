@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lean-proof-agent"
-version = "0.2.0"
+version = "0.3.0"
 description = "A minimal LLM proof-repair loop verified by Lean 4 and Mathlib"
 readme = "README.md"
 requires-python = ">=3.11"

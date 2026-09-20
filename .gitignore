@@ -18,6 +18,7 @@ lake-packages/
 # Runtime artifacts and local secrets
 runs/
 evaluations/
+comparisons/
 .env
 .env.*
 !.env.example

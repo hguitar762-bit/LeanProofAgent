@@ -14,6 +14,7 @@ from .benchmarks import (
     load_benchmark_paths,
     load_problem_file,
 )
+from .comparison import compare_evaluations, render_terminal, write_comparison
 from .evaluation import EvaluationRunner, render_markdown
 from .llm import LLMBackend
 from .models import LeanProblem
@@ -74,6 +75,19 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--project-root", type=Path, default=Path.cwd())
     evaluate.add_argument("--timeout", type=float, default=120.0)
     evaluate.set_defaults(handler=_evaluate)
+
+    compare = subcommands.add_parser(
+        "compare", help="compare two saved evaluation.json files"
+    )
+    compare.add_argument("evaluation_a", type=Path)
+    compare.add_argument("evaluation_b", type=Path)
+    compare.add_argument("--output-dir", type=Path, default=Path("comparisons"))
+    compare.add_argument(
+        "--json",
+        action="store_true",
+        help="also write a machine-readable comparison.json",
+    )
+    compare.set_defaults(handler=_compare)
     return parser
 
 
@@ -159,6 +173,18 @@ def _evaluation_backend(name: str, model: str) -> LLMBackend:
     if name == "mock":
         return OfflineMockBackend()
     return OpenAIBackend(model)
+
+
+def _compare(args: argparse.Namespace) -> int:
+    result = compare_evaluations(args.evaluation_a, args.evaluation_b)
+    markdown_path, json_path = write_comparison(
+        result, args.output_dir, write_json=args.json
+    )
+    print(render_terminal(result), end="")
+    print(f"Markdown: {markdown_path}")
+    if json_path:
+        print(f"JSON: {json_path}")
+    return 0
 
 
 if __name__ == "__main__":
