@@ -19,6 +19,7 @@ lake-packages/
 runs/
 evaluations/
 comparisons/
+autoformalizations/
 .env
 .env.*
 !.env.example

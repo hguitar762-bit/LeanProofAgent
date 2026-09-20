@@ -1,0 +1,6 @@
+{
+  "name": "logic_and_swap",
+  "description": "Swap the two sides of a conjunction.",
+  "category": "logic",
+  "text": "For any propositions P and Q, if both P and Q are true, then both Q and P are true."
+}

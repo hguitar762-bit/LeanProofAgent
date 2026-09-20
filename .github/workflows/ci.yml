@@ -27,3 +27,5 @@ jobs:
         run: pytest
       - name: Offline repair demo
         run: python examples/mock_repair_demo.py
+      - name: Offline autoformalization demo
+        run: python examples/mock_autoformalization_demo.py

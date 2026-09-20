@@ -1,0 +1,6 @@
+{
+  "name": "algebra_add_neg",
+  "description": "An integer plus its additive inverse is zero.",
+  "category": "algebra",
+  "text": "For every integer z, z plus negative z equals zero."
+}

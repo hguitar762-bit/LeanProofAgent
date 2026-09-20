@@ -16,10 +16,12 @@ from .benchmarks import (
 )
 from .comparison import compare_evaluations, render_terminal, write_comparison
 from .evaluation import EvaluationRunner, render_markdown
+from .formalization import AutoformalizationAgent, NaturalLanguageProblem
 from .llm import LLMBackend
 from .models import LeanProblem
 from .offline_backend import OfflineMockBackend
 from .openai_backend import OpenAIBackend
+from .text_benchmarks import list_text_benchmarks, load_text_benchmark
 from .verifier import LeanVerifier
 
 
@@ -32,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     listing = subcommands.add_parser("list-benchmarks", help="list bundled theorem prompts")
     listing.set_defaults(handler=_list_benchmarks)
+
+    text_listing = subcommands.add_parser(
+        "list-text-benchmarks", help="list bundled natural-language prompts"
+    )
+    text_listing.set_defaults(handler=_list_text_benchmarks)
 
     solve = subcommands.add_parser("solve", help="solve a theorem or benchmark")
     source = solve.add_mutually_exclusive_group(required=True)
@@ -49,6 +56,26 @@ def build_parser() -> argparse.ArgumentParser:
     solve.add_argument("--project-root", type=Path, default=Path.cwd())
     solve.add_argument("--timeout", type=float, default=120.0)
     solve.set_defaults(handler=_solve)
+
+    solve_text = subcommands.add_parser(
+        "solve-text", help="formalize a natural-language proposition and prove it"
+    )
+    solve_text.add_argument("text", nargs="?", help="natural-language proposition")
+    solve_text.add_argument("--benchmark", help="bundled natural-language benchmark")
+    solve_text.add_argument("--name", help="simple Lean theorem identifier")
+    solve_text.add_argument(
+        "--model",
+        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
+        help="OpenAI model (default: OPENAI_MODEL or gpt-5.5)",
+    )
+    solve_text.add_argument("--max-formalization-attempts", type=int, default=3)
+    solve_text.add_argument("--max-attempts", type=int, default=3)
+    solve_text.add_argument(
+        "--artifacts-dir", type=Path, default=Path("autoformalizations")
+    )
+    solve_text.add_argument("--project-root", type=Path, default=Path.cwd())
+    solve_text.add_argument("--timeout", type=float, default=120.0)
+    solve_text.set_defaults(handler=_solve_text)
 
     evaluate = subcommands.add_parser(
         "evaluate", help="run a theorem benchmark suite and aggregate metrics"
@@ -118,6 +145,13 @@ def _list_benchmarks(_: argparse.Namespace) -> int:
     return 0
 
 
+def _list_text_benchmarks(_: argparse.Namespace) -> int:
+    for problem in list_text_benchmarks():
+        print(f"{problem.name}: {problem.description}")
+        print(f"  {problem.text}")
+    return 0
+
+
 def _solve(args: argparse.Namespace) -> int:
     if args.benchmark:
         problem = load_benchmark(args.benchmark)
@@ -144,6 +178,45 @@ def _solve(args: argparse.Namespace) -> int:
     elif result.attempts:
         print("Final Lean feedback:", file=sys.stderr)
         print(result.attempts[-1].verification.compiler_feedback, file=sys.stderr)
+    return 0 if result.success else 1
+
+
+def _solve_text(args: argparse.Namespace) -> int:
+    if bool(args.text) == bool(args.benchmark):
+        raise ValueError("provide either natural-language text or --benchmark")
+    if args.benchmark:
+        bundled = load_text_benchmark(args.benchmark)
+        problem = NaturalLanguageProblem(
+            args.name or bundled.name,
+            bundled.text,
+            bundled.description,
+            bundled.category,
+        )
+    else:
+        problem = NaturalLanguageProblem(args.name or "autoformalized", args.text)
+
+    backend = OpenAIBackend(args.model)
+    verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
+    result = AutoformalizationAgent(
+        backend,
+        verifier,
+        verifier,
+        max_formalization_attempts=args.max_formalization_attempts,
+        max_proof_attempts=args.max_attempts,
+        artifacts_root=args.artifacts_dir,
+    ).solve(problem)
+    if result.final_theorem:
+        print("Formalized theorem:")
+        print(result.final_theorem)
+    if result.success:
+        print("SUCCESS: the generated theorem and proof were accepted by Lean")
+        print("Verified proof:")
+        print(result.verified_proof)
+    elif result.final_problem is None:
+        print("FAILED: no valid theorem statement was produced", file=sys.stderr)
+    else:
+        print("FAILED: theorem was valid but proof attempts were exhausted", file=sys.stderr)
+    print(f"Artifacts: {result.run_dir}")
     return 0 if result.success else 1
 
 

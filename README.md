@@ -3,10 +3,19 @@
 LeanProofAgent is a small, executable framework for **kernel-checked mathematical
 reasoning**. An LLM proposes a Lean 4 proof; Lean checks it against Mathlib. If
 Lean rejects the proof, the agent sends the exact compiler feedback back to the
-LLM and tries again, up to a fixed limit. Version 0.3 adds evaluation comparison
-and regression analysis without changing that trusted proof loop.
+LLM and tries again, up to a fixed limit. Version 0.4 adds a compiler-guided
+natural-language autoformalization stage without changing that trusted proof
+loop.
 
 ```text
+natural-language proposition
+       │
+       ▼
+  LLM formalizer ──► theorem statement ──► Lean elaboration check
+       ▲                                          │
+       └──────────── exact Lean error ◄───────────┘
+                                                  │ valid statement
+                                                  ▼
 theorem statement
        │
        ▼
@@ -37,11 +46,16 @@ Included:
   latency/attempt metrics, and optional provider-reported token usage.
 - Saved-evaluation comparison with aggregate deltas, benchmark coverage changes,
   and per-theorem regression analysis.
+- Natural-language-to-Lean theorem generation with bounded, compiler-guided
+  statement repair before the existing proof loop begins.
+- Three small natural-language benchmarks covering arithmetic, logic, and
+  algebra, plus an offline end-to-end autoformalization demo.
 - Twenty theorem-only benchmarks across arithmetic, algebra, logic, lists,
   sets, and inequalities.
 
 Deliberately not included: a web UI, database, RAG, multi-agent orchestration,
-or benchmark-specific proof lookup.
+fine-tuning, reinforcement learning, parallel proof search, or
+benchmark-specific proof lookup.
 
 ## Architecture
 
@@ -58,9 +72,12 @@ src/lean_proof_agent/
 ├── benchmarks.py       theorem-only benchmark loader
 ├── evaluation.py       sequential runner, metrics, JSON, and Markdown
 ├── comparison.py       saved-run deltas and per-theorem regressions
+├── formalization.py    text → theorem generation and Lean-guided repair
+├── text_benchmarks.py  natural-language benchmark loader
 └── cli.py              `lean-proof` command
 
 benchmarks/             statements and metadata, never solutions
+text_benchmarks/        natural-language propositions, never formalizations
 examples/               offline mock-LLM repair demo
 tests/                  unit tests plus real-Lean integration tests
 ```
@@ -185,6 +202,54 @@ lean-proof solve --problem path/to/problem.json --artifacts-dir runs
 The declaration must not include `:=` or a proof. That prevents a benchmark
 file from smuggling in its own answer.
 
+## Autoformalization
+
+Formalize a natural-language proposition and then prove the generated theorem:
+
+```bash
+lean-proof solve-text "For every natural number n, n + 0 = n"
+```
+
+Useful controls mirror the existing proof command while keeping the two retry
+budgets separate:
+
+```bash
+lean-proof solve-text \
+  "For every natural number n, n + 0 = n" \
+  --name natural_add_zero \
+  --max-formalization-attempts 3 \
+  --max-attempts 3 \
+  --model gpt-5.5
+```
+
+Bundled natural-language prompts can be inspected and run by name:
+
+```bash
+lean-proof list-text-benchmarks
+lean-proof solve-text --benchmark arithmetic_add_zero
+```
+
+The formalization model must return exactly one `theorem` declaration without
+a proof body. Responses containing `:=`, `sorry`, `admit`, `axiom`, extra code
+fences, or a `where` block are rejected before Lean runs. For structurally safe
+responses, Lean elaborates an internal temporary `axiom` declaration with
+`autoImplicit` disabled. A small Lean metaprogram also confirms that the
+declaration's type is a proposition. Together these checks cover syntax,
+referenced names, types, and theorem shape without pretending the proposition
+has been proved. The temporary axiom is never passed to the proof stage or
+counted as success. If elaboration fails, its exact feedback is returned to the
+model for a bounded repair attempt.
+
+Once a statement elaborates, the unchanged `ProofAgent` receives that theorem
+and success still requires a generated proof accepted by `lake env lean` with
+exit code 0.
+
+**Semantic boundary:** Lean verifies that the final proof proves the generated
+Lean theorem. It does not automatically establish that the generated theorem
+faithfully captures every meaning, assumption, or ambiguity in the original
+natural-language proposition. Autoformalization therefore needs human review
+when semantic fidelity matters.
+
 ## Evaluation
 
 Evaluate all bundled benchmarks with OpenAI:
@@ -308,7 +373,7 @@ Total latency: 84.00s
 | set_union_comm| sets       | failed   |        3 |   6.10s |
 ```
 
-## Offline repair demo
+## Offline demos
 
 The demo spends no API credits. Its mock backend deliberately emits an invalid
 proof first, checks that the second prompt contains Lean's real error, and then
@@ -316,10 +381,14 @@ returns a repair. Both attempts still go through the real Lean compiler.
 
 ```bash
 python examples/mock_repair_demo.py
+python examples/mock_autoformalization_demo.py
 ```
 
-This is a test fixture, not a benchmark solver. Production CLI runs use the LLM
-backend and benchmark files contain no answers.
+The autoformalization demo exercises the complete offline sequence with a mock
+model and real Lean: natural language → invalid statement → Lean feedback →
+repaired statement → `ProofAgent` → verified proof. These are test fixtures,
+not benchmark solvers. Production CLI runs use the LLM backend and benchmark
+files contain no answers.
 
 ## Run artifacts
 
@@ -342,6 +411,19 @@ and optional provider token usage. `summary.json` records success/failure, total
 attempts, aggregate reported usage, and the final verified proof when one exists.
 `runs/` is ignored by Git because it can contain model output and large logs.
 
+Each `solve-text` invocation similarly writes a unique directory:
+
+```text
+autoformalizations/20260920T120000Z-natural_add_zero-a1b2c3d4/
+├── input.json                    original natural language and retry limits
+├── formalization_01.lean         temporary Lean elaboration source
+├── formalization_01.json         raw output, normalized theorem, and Lean error
+├── formalization_02.lean
+├── formalization_02.json
+├── proof/                        unchanged ProofAgent run artifacts
+└── summary.json                  final theorem and verified proof
+```
+
 ## Verification and safety boundary
 
 - Verification is a subprocess call with an argument list, not shell string
@@ -350,6 +432,8 @@ attempts, aggregate reported usage, and the final verified proof when one exists
 - Exit code 0 is the only success condition.
 - Explicit holes and axiom injection (`sorry`, `admit`, `axiom`) are rejected
   before Lean is invoked and are still recorded as failed attempts.
+- Formalization additionally rejects every proof body (`:=`) and uses an
+  isolated temporary axiom only to ask Lean to elaborate the proposition.
 - The LLM cannot modify repository source through this API; it only supplies the
   proof expression appended to a validated theorem declaration.
 
@@ -373,6 +457,11 @@ real Lean to establish all of the following:
 4. a repaired proof succeeds; and
 5. both attempts and the run summary are persisted.
 
+Autoformalization tests additionally confirm that unsafe declarations never
+reach Lean, invalid statements receive compiler-guided repair, final statements
+flow through the existing `ProofAgent`, and the original text, each statement,
+Lean feedback, proof attempts, and verified proof are persisted.
+
 CI performs `lake update`, downloads the Mathlib cache, installs Python 3.11,
 runs pytest, and executes the offline repair demo. Evaluation tests use mock
 backends and never call a paid API; a Lean-marked integration test confirms that
@@ -382,6 +471,11 @@ evaluation success still comes from the real compiler.
 
 - The MVP handles one theorem declaration at a time and expects imports plus a
   declaration without a proof body; it is not a general Lean project editor.
+- Natural-language formalization is model-generated and can be semantically
+  wrong even when its statement elaborates and its proof is kernel-verified.
+- The formalizer currently uses `Mathlib`, a single theorem declaration, and a
+  simple full-error retry prompt; it does not ask clarifying questions about
+  ambiguous source text.
 - Generation is synchronous and uses a simple full-error retry prompt. There is
   no streaming, parallel search, or proof minimization.
 - Lexical blocking covers explicit proof holes and axiom declarations, but the
@@ -395,9 +489,10 @@ evaluation success still comes from the real compiler.
 
 ## Best next step
 
-Add reproducible prompt/model metadata (for example a user-supplied run label or
-prompt hash) to evaluation artifacts so comparison reports can identify the
-exact experimental configuration without adding a database.
+Develop semantic-alignment evaluation for autoformalization: curated pairs of
+natural-language propositions and reviewed Lean statements, including ambiguous
+and adversarial cases. This would measure meaning preservation separately from
+the already-enforced syntax, type, and proof checks.
 
 ## License
 

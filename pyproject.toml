@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lean-proof-agent"
-version = "0.3.0"
-description = "A minimal LLM proof-repair loop verified by Lean 4 and Mathlib"
+version = "0.4.0"
+description = "Lean-verified proof repair and natural-language autoformalization"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -31,6 +31,7 @@ packages = ["src/lean_proof_agent"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "benchmarks" = "lean_proof_agent/benchmarks"
+"text_benchmarks" = "lean_proof_agent/text_benchmarks"
 
 [tool.pytest.ini_options]
 addopts = "-ra"
