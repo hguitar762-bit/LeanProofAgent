@@ -14,7 +14,7 @@ natural language → LLM statement → Lean elaboration → statement repair
 → LLM proof → Lean verification → proof repair → semantic equivalence check
 ```
 
-The runner records the UTC timestamp, exact Git commit, OpenAI backend and model,
+The runner records the UTC timestamp, exact Git commit, backend and model,
 attempt limits, Lean toolchain and timeout, benchmark SHA-256 and problem IDs,
 explicit model parameters, complete per-problem outcomes, latency, and
 provider-reported token usage when available.
@@ -56,6 +56,38 @@ equivalence attempts per direction, and a 120-second Lean timeout. The current
 OpenAI adapter sends only `model`, `instructions`, and `input`; temperature,
 reasoning effort, and output limits therefore use provider defaults and are
 recorded as such rather than guessed.
+
+### Local Ollama alternative
+
+Ollama can run the identical experiment pipeline without an OpenAI credential.
+Start the local service and pull a caller-selected model:
+
+```powershell
+ollama serve
+ollama pull <model>
+$env:OLLAMA_MODEL = "<model>"
+```
+
+Run a one-problem smoke test before a full local baseline:
+
+```powershell
+.venv\Scripts\python.exe examples\run_real_model_experiment.py `
+  --backend ollama `
+  --model $env:OLLAMA_MODEL `
+  --name local_smoke_001 `
+  --ids arith_add_zero
+
+.venv\Scripts\python.exe examples\run_real_model_experiment.py `
+  --backend ollama `
+  --model $env:OLLAMA_MODEL `
+  --name local_baseline_001
+```
+
+The runner checks that Ollama is reachable and the model is installed before
+creating the experiment. Its config records the `ollama-http` backend and model.
+Ollama `prompt_eval_count` and `eval_count` values are preserved when returned;
+missing usage remains unavailable. Ollama changes only model transport, not the
+formalization, repair, proof, Lean verification, or equivalence standards.
 
 ## Metrics
 

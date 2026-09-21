@@ -23,6 +23,7 @@ from .models import (
     TokenUsage,
     VerificationResult,
 )
+from .ollama_backend import OllamaBackend
 from .semantic_equivalence import (
     EquivalenceDirectionResult,
     SemanticEquivalenceChecker,
@@ -46,6 +47,7 @@ __all__ = [
     "LeanVerifier",
     "LLMBackend",
     "NaturalLanguageProblem",
+    "OllamaBackend",
     "ProofAgent",
     "RunResult",
     "SemanticReview",

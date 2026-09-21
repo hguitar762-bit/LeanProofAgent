@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 import sys
 
@@ -14,6 +13,7 @@ from .benchmarks import (
     load_benchmark_paths,
     load_problem_file,
 )
+from .backends import create_backend
 from .comparison import compare_evaluations, render_terminal, write_comparison
 from .evaluation import EvaluationRunner, render_markdown
 from .formalization import AutoformalizationAgent, NaturalLanguageProblem
@@ -23,10 +23,8 @@ from .formalization_evaluation import (
     load_semantic_reviews,
     render_formalization_markdown,
 )
-from .llm import LLMBackend
 from .models import LeanProblem
 from .offline_backend import OfflineMockBackend
-from .openai_backend import OpenAIBackend
 from .semantic_equivalence import (
     SemanticEquivalenceChecker,
     load_statement_file,
@@ -58,10 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--problem", type=Path, help="path to a theorem-only JSON problem")
     source.add_argument("--theorem", help="inline Lean theorem declaration without ':='")
     solve.add_argument("--name", default="inline", help="name for an inline theorem")
+    solve.add_argument("--backend", choices=("openai", "ollama"), default="openai")
     solve.add_argument(
         "--model",
-        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
-        help="OpenAI model (default: OPENAI_MODEL or gpt-5.5)",
+        help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
     )
     solve.add_argument("--max-attempts", type=int, default=3)
     solve.add_argument("--artifacts-dir", type=Path, default=Path("runs"))
@@ -76,9 +74,11 @@ def build_parser() -> argparse.ArgumentParser:
     solve_text.add_argument("--benchmark", help="bundled natural-language benchmark")
     solve_text.add_argument("--name", help="simple Lean theorem identifier")
     solve_text.add_argument(
+        "--backend", choices=("openai", "ollama"), default="openai"
+    )
+    solve_text.add_argument(
         "--model",
-        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
-        help="OpenAI model (default: OPENAI_MODEL or gpt-5.5)",
+        help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
     )
     solve_text.add_argument("--max-formalization-attempts", type=int, default=3)
     solve_text.add_argument("--max-attempts", type=int, default=3)
@@ -100,14 +100,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate.add_argument(
         "--backend",
-        choices=("openai", "mock"),
+        choices=("openai", "ollama", "mock"),
         default="openai",
         help="mock is an offline plumbing check using one generic tactic",
     )
     evaluate.add_argument(
         "--model",
-        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
-        help="OpenAI model (ignored by the mock backend)",
+        help="model name (ignored by mock; otherwise backend environment/default)",
     )
     evaluate.add_argument("--max-attempts", type=int, default=3)
     evaluate.add_argument("--output-dir", type=Path, default=Path("evaluations"))
@@ -131,9 +130,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="independent human semantic review JSON from a prior evaluation",
     )
     evaluate_formalization.add_argument(
+        "--backend", choices=("openai", "ollama"), default="openai"
+    )
+    evaluate_formalization.add_argument(
         "--model",
-        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
-        help="OpenAI model (default: OPENAI_MODEL or gpt-5.5)",
+        help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
     )
     evaluate_formalization.add_argument(
         "--max-formalization-attempts", type=int, default=3
@@ -156,9 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
     check_equivalence.add_argument("reference", type=Path)
     check_equivalence.add_argument("generated", type=Path)
     check_equivalence.add_argument(
+        "--backend", choices=("openai", "ollama"), default="openai"
+    )
+    check_equivalence.add_argument(
         "--model",
-        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
-        help="OpenAI model (default: OPENAI_MODEL or gpt-5.5)",
+        help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
     )
     check_equivalence.add_argument("--max-attempts", type=int, default=2)
     check_equivalence.add_argument(
@@ -225,7 +228,7 @@ def _solve(args: argparse.Namespace) -> int:
     else:
         problem = LeanProblem(args.name, args.theorem)
 
-    backend = OpenAIBackend(args.model)
+    backend, _ = create_backend(args.backend, args.model)
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
     agent = ProofAgent(
         backend,
@@ -260,7 +263,7 @@ def _solve_text(args: argparse.Namespace) -> int:
     else:
         problem = NaturalLanguageProblem(args.name or "autoformalized", args.text)
 
-    backend = OpenAIBackend(args.model)
+    backend, _ = create_backend(args.backend, args.model)
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
     result = AutoformalizationAgent(
         backend,
@@ -291,7 +294,11 @@ def _evaluate(args: argparse.Namespace) -> int:
         if args.benchmark
         else list_benchmarks()
     )
-    backend = _evaluation_backend(args.backend, args.model)
+    if args.backend == "mock":
+        backend = OfflineMockBackend()
+        model = None
+    else:
+        backend, model = create_backend(args.backend, args.model)
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
     result = EvaluationRunner(
         backend,
@@ -299,7 +306,7 @@ def _evaluate(args: argparse.Namespace) -> int:
         max_attempts=args.max_attempts,
         output_root=args.output_dir,
         backend_name=args.backend,
-        model=args.model if args.backend == "openai" else None,
+        model=model,
     ).run(problems)
     print(render_markdown(result), end="")
     print(f"JSON: {result.evaluation_dir / 'evaluation.json'}")
@@ -312,8 +319,9 @@ def _check_equivalence(args: argparse.Namespace) -> int:
     generated = load_statement_file(args.generated)
     imports = merge_imports(reference.imports, generated.imports)
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
+    backend, _ = create_backend(args.backend, args.model)
     result = SemanticEquivalenceChecker(
-        OpenAIBackend(args.model),
+        backend,
         verifier,
         max_attempts=args.max_attempts,
         artifacts_root=args.artifacts_dir,
@@ -322,26 +330,21 @@ def _check_equivalence(args: argparse.Namespace) -> int:
     return 0
 
 
-def _evaluation_backend(name: str, model: str) -> LLMBackend:
-    if name == "mock":
-        return OfflineMockBackend()
-    return OpenAIBackend(model)
-
-
 def _evaluate_formalization(args: argparse.Namespace) -> int:
     problems = load_formalization_benchmarks(args.benchmark)
     reviews = load_semantic_reviews(args.reviews) if args.reviews else None
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
+    backend, model = create_backend(args.backend, args.model)
     result = FormalizationEvaluationRunner(
-        OpenAIBackend(args.model),
+        backend,
         verifier,
         verifier,
         max_formalization_attempts=args.max_formalization_attempts,
         max_proof_attempts=args.max_attempts,
         max_equivalence_attempts=args.max_equivalence_attempts,
         output_root=args.output_dir,
-        backend_name="openai",
-        model=args.model,
+        backend_name=args.backend,
+        model=model,
         reviews=reviews,
     ).run(problems)
     print(render_formalization_markdown(result), end="")

@@ -1,4 +1,4 @@
-"""Run a reproducible real-model baseline; never falls back to a mock backend."""
+"""Run a reproducible OpenAI or local Ollama baseline without mock fallback."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ import os
 from pathlib import Path
 import subprocess
 
+from lean_proof_agent.backends import create_backend
 from lean_proof_agent.experiment_reporting import write_experiment_bundle
 from lean_proof_agent.formalization_benchmarks import load_formalization_benchmarks
 from lean_proof_agent.formalization_evaluation import FormalizationEvaluationRunner
-from lean_proof_agent.openai_backend import OpenAIBackend
 from lean_proof_agent.verifier import LeanVerifier
 
 
@@ -23,14 +23,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run a real OpenAI autoformalization experiment with Lean."
+        description="Run a real OpenAI or local Ollama experiment with Lean."
     )
     parser.add_argument("--name", required=True)
     parser.add_argument(
         "--benchmark", type=Path, default=ROOT / "benchmarks" / "formalization"
     )
     parser.add_argument("--ids", nargs="*", help="optional smoke-test problem ids")
-    parser.add_argument("--model", default=os.environ.get("OPENAI_MODEL", "gpt-5.5"))
+    parser.add_argument("--backend", choices=("openai", "ollama"), default="openai")
+    parser.add_argument("--model")
     parser.add_argument("--max-formalization-attempts", type=int, default=3)
     parser.add_argument("--max-proof-attempts", type=int, default=3)
     parser.add_argument("--max-equivalence-attempts", type=int, default=2)
@@ -41,11 +42,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if not os.environ.get("OPENAI_API_KEY"):
+    if args.backend == "openai" and not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit(
             "OPENAI_API_KEY is not set. Set it in the current process environment; "
             "the experiment runner never reads a .env file or stores the key."
         )
+    backend, model = create_backend(args.backend, args.model)
     all_problems = load_formalization_benchmarks(args.benchmark)
     problems = _select_problems(all_problems, args.ids)
     experiment_dir = args.experiments_root.resolve() / args.name
@@ -59,13 +61,17 @@ def main(argv: list[str] | None = None) -> int:
         "status": "started",
         "timestamp_utc": timestamp,
         "git_commit": _git_commit(),
-        "backend": "openai-responses-api",
-        "backend_package_version": _package_version("openai"),
-        "model": args.model,
+        "backend": (
+            "openai-responses-api" if args.backend == "openai" else "ollama-http"
+        ),
+        "backend_package_version": (
+            _package_version("openai") if args.backend == "openai" else None
+        ),
+        "model": model,
         "explicit_model_parameters": {},
         "model_parameter_note": (
-            "No temperature, reasoning, or max-output override is sent; provider "
-            "defaults apply because OpenAIBackend sends only model, instructions, and input."
+            "No temperature, reasoning, or max-output override is sent; backend "
+            "defaults apply. Ollama requests use system, prompt, and stream=false."
         ),
         "max_formalization_attempts": args.max_formalization_attempts,
         "max_proof_attempts": args.max_proof_attempts,
@@ -82,15 +88,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     verifier = LeanVerifier(ROOT, timeout_seconds=args.timeout)
     result = FormalizationEvaluationRunner(
-        OpenAIBackend(args.model),
+        backend,
         verifier,
         verifier,
         max_formalization_attempts=args.max_formalization_attempts,
         max_proof_attempts=args.max_proof_attempts,
         max_equivalence_attempts=args.max_equivalence_attempts,
         output_root=experiment_dir / "artifacts",
-        backend_name="openai",
-        model=args.model,
+        backend_name=args.backend,
+        model=model,
     ).run(problems)
     provider_failures = sum(
         "backend failure" in problem.failure_categories for problem in result.problems
@@ -155,4 +161,7 @@ def _repository_path(path: Path) -> str:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SystemExit(f"error: {exc}") from None

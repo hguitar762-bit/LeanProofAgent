@@ -37,6 +37,7 @@ Included:
 - Lean 4.34.0 and the matching Mathlib 4.34.0 release, pinned in the repository.
 - A model-neutral `LLMBackend` protocol.
 - An OpenAI backend using the official Python SDK and Responses API.
+- A local Ollama backend using Ollama's HTTP API with no paid API credential.
 - Compiler-guided retry with a configurable maximum attempt count.
 - Rejection of `sorry`, `admit`, `axiom`, and theorem declarations that already
   contain a proof body.
@@ -73,6 +74,8 @@ src/lean_proof_agent/
 ├── verifier.py         subprocess boundary for `lake env lean`
 ├── llm.py              backend protocol and output normalization
 ├── openai_backend.py   OpenAI Responses API adapter
+├── ollama_backend.py   local Ollama HTTP API adapter
+├── backends.py         shared backend and model selection
 ├── offline_backend.py  generic offline tactic for plumbing checks only
 ├── prompts.py          initial and compiler-repair prompts
 ├── artifacts.py        per-attempt Lean and JSON records
@@ -135,7 +138,7 @@ lake update
 # Downloads Mathlib's precompiled cache instead of rebuilding it all locally.
 lake exe cache get
 
-# Install the Python package, OpenAI adapter, and test tools.
+# Install the Python package, optional OpenAI adapter, and test tools.
 python -m venv .venv
 # Windows PowerShell: .venv\Scripts\Activate.ps1
 # Linux/macOS: source .venv/bin/activate
@@ -172,6 +175,40 @@ read `response.output_text`. See the
 [official OpenAI API quickstart](https://developers.openai.com/api/docs/quickstart).
 Model access varies by account, so set `OPENAI_MODEL` or pass `--model` when the
 default is unavailable.
+
+## Use local Ollama
+
+Install and start [Ollama](https://ollama.com/), then download a model suitable
+for Lean code generation. The model name is always supplied by the caller; the
+project does not hard-code an Ollama model.
+
+```powershell
+ollama serve
+ollama pull <model>
+$env:OLLAMA_MODEL = "<model>"
+
+lean-proof solve-text `
+  --name natural_add_zero `
+  --text "For every natural number n, n plus zero equals n." `
+  --backend ollama `
+  --model $env:OLLAMA_MODEL
+```
+
+An explicit `--model` takes precedence over `OLLAMA_MODEL`. Set `OLLAMA_HOST`
+to override the default `http://localhost:11434` endpoint. Before generation,
+the backend checks `/api/tags` and reports a clear error if the server cannot be
+reached or the requested model is absent. Generation uses Ollama's
+`/api/generate` endpoint with streaming disabled. If Ollama returns
+`prompt_eval_count` and `eval_count`, they are recorded as input and output
+tokens; otherwise usage stays unavailable. See the official
+[generate API](https://docs.ollama.com/api/generate),
+[model-list API](https://docs.ollama.com/api/tags), and
+[error documentation](https://docs.ollama.com/api/errors).
+
+Ollama runs use the same prompts, bounded repair loops, Lean subprocess, and
+kernel-success criterion as OpenAI runs. OpenAI remains the default backend and
+is optional for local Ollama use: install `.[dev]` for Ollama-only development,
+or `.[openai,dev]` to enable both.
 
 ## Use the CLI
 
@@ -510,11 +547,17 @@ answers, and reference statements are never placed in model prompts.
 
 ## Real-model experiment
 
-The reproducible experiment runner uses only the real OpenAI backend and refuses
-to run without `OPENAI_API_KEY`:
+The reproducible experiment runner accepts either the real OpenAI backend or a
+local Ollama model. It never substitutes mock results for either backend:
 
 ```bash
 python examples/run_real_model_experiment.py --name real_model_baseline_001
+
+python examples/run_real_model_experiment.py \
+  --backend ollama \
+  --model <model> \
+  --name local_smoke_001 \
+  --ids arith_add_zero
 ```
 
 Run the documented five-problem smoke test before the full 36-problem baseline.

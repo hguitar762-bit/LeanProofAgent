@@ -25,7 +25,9 @@ def test_solve_text_keeps_original_autoformalization_constructor(
                 run_dir=tmp_path,
             )
 
-    monkeypatch.setattr(cli, "OpenAIBackend", lambda model: object())
+    monkeypatch.setattr(
+        cli, "create_backend", lambda backend, model: (object(), model or "fixture")
+    )
     monkeypatch.setattr(cli, "LeanVerifier", lambda *args, **kwargs: object())
     monkeypatch.setattr(cli, "AutoformalizationAgent", FakeAgent)
     exit_code = cli.main(
@@ -34,6 +36,10 @@ def test_solve_text_keeps_original_autoformalization_constructor(
             "True holds.",
             "--name",
             "cli_smoke",
+            "--backend",
+            "ollama",
+            "--model",
+            "fixture-local-model",
             "--artifacts-dir",
             str(tmp_path),
         ]
@@ -55,7 +61,9 @@ def test_evaluate_formalization_forwards_equivalence_attempt_limit(
             return SimpleNamespace(evaluation_dir=tmp_path)
 
     monkeypatch.setattr(cli, "load_formalization_benchmarks", lambda path: (object(),))
-    monkeypatch.setattr(cli, "OpenAIBackend", lambda model: object())
+    monkeypatch.setattr(
+        cli, "create_backend", lambda backend, model: (object(), model or "fixture")
+    )
     monkeypatch.setattr(cli, "LeanVerifier", lambda *args, **kwargs: object())
     monkeypatch.setattr(cli, "FormalizationEvaluationRunner", FakeRunner)
     monkeypatch.setattr(cli, "render_formalization_markdown", lambda result: "")
