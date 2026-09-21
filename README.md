@@ -3,9 +3,9 @@
 LeanProofAgent is a small, executable framework for **kernel-checked mathematical
 reasoning**. An LLM proposes a Lean 4 proof; Lean checks it against Mathlib. If
 Lean rejects the proof, the agent sends the exact compiler feedback back to the
-LLM and tries again, up to a fixed limit. Version 0.5 adds a curated
-autoformalization benchmark and separates syntactic validity, provability, and
-human-reviewed semantic correctness without changing that trusted proof loop.
+LLM and tries again, up to a fixed limit. Version 0.6 adds conservative,
+Lean-verified bidirectional implication checking between generated and reference
+statements while keeping human-reviewed semantic correctness separate.
 
 ```text
 natural-language proposition
@@ -53,6 +53,9 @@ Included:
 - Autoformalization evaluation with statement elaboration, repair, proof,
   conservative comparison, failure-category, JSON, Markdown, and independent
   semantic-review artifacts.
+- A standalone semantic-equivalence checker that turns theorem declarations
+  into closed propositions and checks reference → generated and generated →
+  reference through the existing kernel-verified proof loop.
 - Three small natural-language benchmarks covering arithmetic, logic, and
   algebra, plus an offline end-to-end autoformalization demo.
 - Twenty theorem-only benchmarks across arithmetic, algebra, logic, lists,
@@ -80,6 +83,7 @@ src/lean_proof_agent/
 ├── formalization.py    text → theorem generation and Lean-guided repair
 ├── formalization_benchmarks.py  curated pair schema and loader
 ├── formalization_evaluation.py  statement/proof/semantic evaluation reports
+├── semantic_equivalence.py  conservative bidirectional implication checker
 ├── text_benchmarks.py  natural-language benchmark loader
 └── cli.py              `lean-proof` command
 
@@ -349,14 +353,28 @@ The evaluator reports these distinct quantities:
 - **End-to-end proof verification rate:** problems with both an elaborated
   statement and a kernel-accepted generated proof, divided by all problems.
 
-`comparison` is deliberately conservative. It is `exact_match` only when the
-generated and reference declarations match after theorem-name and whitespace
-normalization. Every other case is `unknown`; the evaluator never turns failure
-to prove equivalence into a claim of non-equivalence. Even `exact_match` does
-not automatically set semantic correctness.
+The v0.6 evaluator additionally closes each declaration's explicit binders and
+asks the existing `ProofAgent` to prove both implications:
+
+```text
+reference proposition → generated proposition
+generated proposition → reference proposition
+```
+
+Each candidate proof is accepted only when the pinned Lean kernel accepts its
+complete source file. Different theorem and binder names are therefore not an
+automatic mismatch. Both verified directions produce `equivalent`. An
+exhausted or rejected proof search produces `unknown`, never `not_equivalent`.
+The `not_equivalent` value is reserved for a future checker with an explicit,
+machine-verifiable counterexample or other trusted evidence.
+
+This result is an auxiliary signal, not semantic ground truth. **Provability is
+not semantic correctness**, and **failure to prove equivalence is not proof of
+inequivalence**. Human review remains authoritative and independent.
 
 Every run writes `evaluation.json`, `summary.md`, per-problem generation/proof
-artifacts, and a separate `semantic_reviews.json`. Edit only that review file,
+artifacts, both equivalence-direction proof runs, and a separate
+`semantic_reviews.json`. Edit only that review file,
 using `correct`, `incorrect`, `ambiguous`, or `unreviewed`, then apply it to a
 later run:
 
@@ -372,6 +390,39 @@ assumption`, `stronger statement`, `weaker statement`, `wrong quantifier`,
 execution can additionally report `Lean elaboration failure`, `proof
 verification failure`, or `backend failure`. The benchmark source is never
 modified by review writeback.
+
+### Standalone equivalence checking
+
+Provide two JSON files containing a `statement` field and optional `imports`:
+
+```json
+{
+  "statement": "theorem reference (n : ℕ) : n + 0 = n",
+  "imports": ["Mathlib"]
+}
+```
+
+Then run:
+
+```bash
+lean-proof check-equivalence reference.json generated.json
+```
+
+For convenience, the loader also accepts existing `theorem`,
+`reference_statement`, `generated_statement`, or `final_theorem` fields. Imports
+from both files are merged without duplication. The output and saved
+`summary.json` report:
+
+```text
+Semantic Equivalence
+Forward (reference → generated): verified | failed | unknown
+Backward (generated → reference): verified | failed | unknown
+Result: equivalent | unknown
+```
+
+`failed` is reserved for an input, provider, or execution failure. Ordinary
+proof attempts rejected by Lean are `unknown`. Each direction keeps its theorem,
+proof attempts, exact Lean errors, final proof when verified, and run directory.
 
 ## Compare Evaluations
 
@@ -446,12 +497,13 @@ returns a repair. Both attempts still go through the real Lean compiler.
 python examples/mock_repair_demo.py
 python examples/mock_autoformalization_demo.py
 python examples/mock_formalization_evaluation_demo.py
+python examples/mock_semantic_equivalence_demo.py
 ```
 
 The autoformalization demo exercises the complete offline sequence with a mock
 model and real Lean: natural language → invalid statement → Lean feedback →
 repaired statement → `ProofAgent` → verified proof. These are test fixtures,
-not benchmark solvers. The v0.5 evaluation demo additionally writes and checks
+not benchmark solvers. The formalization evaluation demo additionally writes and checks
 the JSON, Markdown, and independent semantic-review workflow. Production CLI
 runs use the LLM backend; no backend contains a lookup table of benchmark
 answers, and reference statements are never placed in model prompts.
@@ -531,6 +583,10 @@ Lean feedback, proof attempts, and verified proof are persisted.
 Semantic-evaluation tests validate the 36-pair schema and category balance,
 unknown-on-unproved comparison behavior, human review isolation, aggregate
 metrics and reports, and real-Lean elaboration of every reference statement.
+Equivalence tests cover renamed binders, logical reordering, quantifier order,
+stronger and weaker statements, missing assumptions, and domain changes. A
+real-Lean integration test verifies both directions through separate compiler
+invocations.
 
 CI performs `lake update`, downloads the Mathlib cache, installs Python 3.11,
 runs pytest, and executes the offline repair demo. Evaluation tests use mock
@@ -547,8 +603,14 @@ evaluation success still comes from the real compiler.
   simple full-error retry prompt; it does not ask clarifying questions about
   ambiguous source text.
 - Conservative statement comparison recognizes only normalized exact matches.
-  Logically equivalent statements with different syntax remain `unknown` until
-  a stronger trusted equivalence check or human review is supplied.
+  The Lean-based checker can recognize more cases, but bounded proof search is
+  incomplete and therefore often returns `unknown`.
+- Logical equivalence of closed propositions is coarser than natural-language
+  semantic fidelity: two independently true mathematical propositions can be
+  logically equivalent without expressing the same intended concept. Human
+  review is still required.
+- The checker currently has no trusted counterexample generator, so it does not
+  emit `not_equivalent`.
 - Generation is synchronous and uses a simple full-error retry prompt. There is
   no streaming, parallel search, or proof minimization.
 - Lexical blocking covers explicit proof holes and axiom declarations, but the
@@ -562,10 +624,9 @@ evaluation success still comes from the real compiler.
 
 ## Best next step
 
-Study trusted, conservative equivalence checking for differently shaped Lean
-propositions, especially quantifier/domain changes and missing assumptions,
-while preserving `unknown` whenever equivalence or non-equivalence is not
-established.
+Develop kernel-checkable counterexample certificates and structure-aware binder
+alignment so the system can distinguish genuine semantic mismatches from mere
+proof-search incompleteness without weakening the `unknown` boundary.
 
 ## License
 

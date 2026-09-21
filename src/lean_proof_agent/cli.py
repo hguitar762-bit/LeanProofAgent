@@ -27,6 +27,12 @@ from .llm import LLMBackend
 from .models import LeanProblem
 from .offline_backend import OfflineMockBackend
 from .openai_backend import OpenAIBackend
+from .semantic_equivalence import (
+    SemanticEquivalenceChecker,
+    load_statement_file,
+    merge_imports,
+    render_equivalence,
+)
 from .text_benchmarks import list_text_benchmarks, load_text_benchmark
 from .verifier import LeanVerifier
 
@@ -134,11 +140,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_formalization.add_argument("--max-attempts", type=int, default=3)
     evaluate_formalization.add_argument(
+        "--max-equivalence-attempts", type=int, default=2
+    )
+    evaluate_formalization.add_argument(
         "--output-dir", type=Path, default=Path("formalization_evaluations")
     )
     evaluate_formalization.add_argument("--project-root", type=Path, default=Path.cwd())
     evaluate_formalization.add_argument("--timeout", type=float, default=120.0)
     evaluate_formalization.set_defaults(handler=_evaluate_formalization)
+
+    check_equivalence = subcommands.add_parser(
+        "check-equivalence",
+        help="Lean-check both implications between two theorem statements",
+    )
+    check_equivalence.add_argument("reference", type=Path)
+    check_equivalence.add_argument("generated", type=Path)
+    check_equivalence.add_argument(
+        "--model",
+        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
+        help="OpenAI model (default: OPENAI_MODEL or gpt-5.5)",
+    )
+    check_equivalence.add_argument("--max-attempts", type=int, default=2)
+    check_equivalence.add_argument(
+        "--artifacts-dir", type=Path, default=Path("equivalence_checks")
+    )
+    check_equivalence.add_argument("--project-root", type=Path, default=Path.cwd())
+    check_equivalence.add_argument("--timeout", type=float, default=120.0)
+    check_equivalence.set_defaults(handler=_check_equivalence)
 
     compare = subcommands.add_parser(
         "compare", help="compare two saved evaluation.json files"
@@ -279,6 +307,21 @@ def _evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _check_equivalence(args: argparse.Namespace) -> int:
+    reference = load_statement_file(args.reference)
+    generated = load_statement_file(args.generated)
+    imports = merge_imports(reference.imports, generated.imports)
+    verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
+    result = SemanticEquivalenceChecker(
+        OpenAIBackend(args.model),
+        verifier,
+        max_attempts=args.max_attempts,
+        artifacts_root=args.artifacts_dir,
+    ).check(reference.statement, generated.statement, imports=imports)
+    print(render_equivalence(result), end="")
+    return 0
+
+
 def _evaluation_backend(name: str, model: str) -> LLMBackend:
     if name == "mock":
         return OfflineMockBackend()
@@ -295,6 +338,7 @@ def _evaluate_formalization(args: argparse.Namespace) -> int:
         verifier,
         max_formalization_attempts=args.max_formalization_attempts,
         max_proof_attempts=args.max_attempts,
+        max_equivalence_attempts=args.max_equivalence_attempts,
         output_root=args.output_dir,
         backend_name="openai",
         model=args.model,

@@ -15,6 +15,7 @@ from .agent import ProofVerifier
 from .formalization import AutoformalizationAgent, StatementVerifier
 from .formalization_benchmarks import FormalizationBenchmark
 from .llm import LLMBackend
+from .semantic_equivalence import SemanticEquivalenceChecker
 
 
 SEMANTIC_REVIEW_STATUSES = frozenset(
@@ -72,6 +73,10 @@ class FormalizationProblemResult:
     repair_attempted: bool
     repair_succeeded: bool
     comparison: str
+    equivalence_forward: str
+    equivalence_backward: str
+    equivalence_result: str
+    equivalence_run_dir: str | None
     semantic_review: str
     semantic_correct: bool | None
     review_notes: str
@@ -87,6 +92,7 @@ class FormalizationEvaluationResult:
     model: str | None
     max_formalization_attempts: int
     max_proof_attempts: int
+    max_equivalence_attempts: int
     total_problems: int
     well_formed_problems: int
     statement_success_rate: float
@@ -96,6 +102,7 @@ class FormalizationEvaluationResult:
     average_formalization_attempts: float
     proof_verified_problems: int
     end_to_end_proof_verification_rate: float
+    equivalent_problems: int
     semantic_review_counts: dict[str, int]
     failure_categories: dict[str, int]
     problems: tuple[FormalizationProblemResult, ...]
@@ -113,18 +120,22 @@ class FormalizationEvaluationRunner:
         *,
         max_formalization_attempts: int = 3,
         max_proof_attempts: int = 3,
+        max_equivalence_attempts: int = 2,
         output_root: Path = Path("formalization_evaluations"),
         backend_name: str = "custom",
         model: str | None = None,
         reviews: dict[str, SemanticReview] | None = None,
     ) -> None:
-        if max_formalization_attempts < 1 or max_proof_attempts < 1:
+        if min(
+            max_formalization_attempts, max_proof_attempts, max_equivalence_attempts
+        ) < 1:
             raise ValueError("attempt limits must be at least 1")
         self.backend = backend
         self.statement_verifier = statement_verifier
         self.proof_verifier = proof_verifier
         self.max_formalization_attempts = max_formalization_attempts
         self.max_proof_attempts = max_proof_attempts
+        self.max_equivalence_attempts = max_equivalence_attempts
         self.output_root = output_root
         self.backend_name = backend_name
         self.model = model
@@ -158,9 +169,30 @@ class FormalizationEvaluationRunner:
                     )
                 )
                 continue
+            equivalence = None
+            equivalence_error = None
+            if result.final_theorem is not None:
+                try:
+                    equivalence = SemanticEquivalenceChecker(
+                        self.backend,
+                        self.proof_verifier,
+                        max_attempts=self.max_equivalence_attempts,
+                        artifacts_root=evaluation_dir / "equivalence",
+                    ).check(
+                        benchmark.reference_statement,
+                        result.final_theorem,
+                        imports=benchmark.imports,
+                    )
+                except Exception as exc:
+                    equivalence_error = f"{type(exc).__name__}: {exc}"
             outcomes.append(
                 _problem_outcome(
-                    benchmark, review, result, time.monotonic() - started
+                    benchmark,
+                    review,
+                    result,
+                    equivalence,
+                    equivalence_error,
+                    time.monotonic() - started,
                 )
             )
         final = _aggregate(
@@ -170,6 +202,7 @@ class FormalizationEvaluationRunner:
             model=self.model,
             max_formalization_attempts=self.max_formalization_attempts,
             max_proof_attempts=self.max_proof_attempts,
+            max_equivalence_attempts=self.max_equivalence_attempts,
         )
         write_formalization_evaluation(final)
         return final
@@ -272,7 +305,9 @@ def render_formalization_markdown(result: FormalizationEvaluationResult) -> str:
         f"- Repair success rate: {repair_rate} ({result.repair_successes}/{result.repair_opportunities})",
         f"- Average formalization attempts: {result.average_formalization_attempts:.2f}",
         f"- End-to-end proof verification rate: {result.end_to_end_proof_verification_rate * 100:.1f}%",
+        f"- Lean-verified semantic equivalences: {result.equivalent_problems}",
         "- Semantic correctness: human review only; exact_match is not used as a review decision",
+        "- Failure to prove either implication yields unknown, not not_equivalent",
         "",
         "## Failure categories",
         "",
@@ -289,8 +324,8 @@ def render_formalization_markdown(result: FormalizationEvaluationResult) -> str:
             "",
             "## Problems",
             "",
-            "| Problem | Natural language | Reference Lean | Generated Lean | Well formed | Proof verified | Comparison | Semantic review | Notes |",
-            "|---|---|---|---|---:|---:|---|---|---|",
+            "| Problem | Natural language | Reference Lean | Generated Lean | Well formed | Proof verified | Comparison | Equivalence forward | Equivalence backward | Equivalence result | Semantic review | Notes |",
+            "|---|---|---|---|---:|---:|---|---|---|---|---|---|",
         ]
     )
     for item in result.problems:
@@ -300,19 +335,26 @@ def render_formalization_markdown(result: FormalizationEvaluationResult) -> str:
             f"`{_cell(_one_line(item.reference_statement))}` | "
             f"{_code_cell(item.generated_statement)} | "
             f"{'yes' if item.well_formed else 'no'} | "
-            f"{'yes' if item.proof_verified else 'no'} | {item.comparison} | "
+            f"{'yes' if item.proof_verified else 'no'} | "
+            f"{item.comparison} | "
+            f"{item.equivalence_forward} | {item.equivalence_backward} | "
+            f"{item.equivalence_result} | "
             f"{item.semantic_review} | {_cell(notes)} |"
         )
     return "\n".join(lines) + "\n"
 
 
-def _problem_outcome(benchmark, review, result, latency):
+def _problem_outcome(
+    benchmark, review, result, equivalence, equivalence_error, latency
+):
     attempts = result.formalization_attempts
     well_formed = result.final_problem is not None
     proof_verified = result.proof_result is not None and result.proof_result.success
     repair_attempted = len(attempts) > 1
     repair_succeeded = repair_attempted and well_formed
     categories = list(review.failure_categories)
+    if equivalence_error:
+        categories.append("equivalence checker failure")
     failure_reason = None
     if not well_formed:
         if attempts:
@@ -343,6 +385,18 @@ def _problem_outcome(benchmark, review, result, latency):
         repair_attempted=repair_attempted,
         repair_succeeded=repair_succeeded,
         comparison=compare_statements(benchmark.reference_statement, result.final_theorem),
+        equivalence_forward=(
+            equivalence.forward.status
+            if equivalence
+            else "failed" if equivalence_error else "unknown"
+        ),
+        equivalence_backward=(
+            equivalence.backward.status
+            if equivalence
+            else "failed" if equivalence_error else "unknown"
+        ),
+        equivalence_result=(equivalence.result if equivalence else "unknown"),
+        equivalence_run_dir=(str(equivalence.run_dir) if equivalence else None),
         semantic_review=review.semantic_review,
         semantic_correct=review.semantic_correct,
         review_notes=review.notes,
@@ -370,6 +424,10 @@ def _exception_outcome(benchmark, review, exc, latency):
         repair_attempted=False,
         repair_succeeded=False,
         comparison="unknown",
+        equivalence_forward="unknown",
+        equivalence_backward="unknown",
+        equivalence_result="unknown",
+        equivalence_run_dir=None,
         semantic_review=review.semantic_review,
         semantic_correct=review.semantic_correct,
         review_notes=review.notes,
@@ -386,6 +444,7 @@ def _aggregate(problems, evaluation_dir, **metadata):
     opportunities = sum(item.repair_attempted for item in problems)
     repairs = sum(item.repair_succeeded for item in problems)
     verified = sum(item.proof_verified for item in problems)
+    equivalent = sum(item.equivalence_result == "equivalent" for item in problems)
     review_counts = {status: 0 for status in sorted(SEMANTIC_REVIEW_STATUSES)}
     failure_counts: dict[str, int] = {}
     for item in problems:
@@ -405,6 +464,7 @@ def _aggregate(problems, evaluation_dir, **metadata):
         ),
         proof_verified_problems=verified,
         end_to_end_proof_verification_rate=verified / total,
+        equivalent_problems=equivalent,
         semantic_review_counts=review_counts,
         failure_categories=failure_counts,
         problems=problems,

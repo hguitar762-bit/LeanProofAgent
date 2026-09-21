@@ -1,4 +1,4 @@
-"""Offline v0.5 evaluation demo using a fixed fixture and real Lean."""
+"""Offline formalization/equivalence evaluation demo using real Lean."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ class DemoBackend:
             [
                 "theorem offline_eval_demo (n : ℕ) : n + missing_symbol = n",
                 "theorem offline_eval_demo (n : ℕ) : n + 0 = n",
+                "by\n  simp",
+                "by\n  simp",
                 "by\n  simp",
             ]
         )
@@ -54,6 +56,9 @@ def main() -> None:
         print(f"repair_succeeded={item.repair_succeeded}")
         print(f"proof_verified={item.proof_verified}")
         print(f"comparison={item.comparison}")
+        print(f"equivalence_forward={item.equivalence_forward}")
+        print(f"equivalence_backward={item.equivalence_backward}")
+        print(f"equivalence_result={item.equivalence_result}")
         print(f"semantic_review={item.semantic_review}")
         print(f"statement_success_rate={result.statement_success_rate:.0%}")
         print(

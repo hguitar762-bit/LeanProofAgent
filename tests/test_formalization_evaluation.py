@@ -68,6 +68,8 @@ def test_evaluation_separates_well_formed_proof_and_human_semantics(
             f"theorem {benchmark.id} (n : ℕ) : n + missing_symbol = n",
             benchmark.reference_statement,
             "by\n  simp",
+            "by\n  simp",
+            "by\n  simp",
         ]
     )
     verifier = FixtureVerifier()
@@ -86,6 +88,9 @@ def test_evaluation_separates_well_formed_proof_and_human_semantics(
     assert item.provable is True
     assert item.proof_verified is True
     assert item.comparison == "exact_match"
+    assert item.equivalence_forward == "verified"
+    assert item.equivalence_backward == "verified"
+    assert item.equivalence_result == "equivalent"
     assert item.semantic_review == "unreviewed"
     assert item.semantic_correct is None
     assert item.repair_attempted is True
@@ -94,6 +99,7 @@ def test_evaluation_separates_well_formed_proof_and_human_semantics(
     assert result.repair_success_rate == 1
     assert result.average_formalization_attempts == 2
     assert result.end_to_end_proof_verification_rate == 1
+    assert result.equivalent_problems == 1
     assert "human review only" in render_formalization_markdown(result)
     assert (result.evaluation_dir / "evaluation.json").is_file()
     assert (result.evaluation_dir / "summary.md").is_file()

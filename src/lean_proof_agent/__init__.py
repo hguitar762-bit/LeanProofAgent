@@ -23,6 +23,11 @@ from .models import (
     TokenUsage,
     VerificationResult,
 )
+from .semantic_equivalence import (
+    EquivalenceDirectionResult,
+    SemanticEquivalenceChecker,
+    SemanticEquivalenceResult,
+)
 from .verifier import LeanVerifier
 
 __all__ = [
@@ -32,6 +37,7 @@ __all__ = [
     "ComparisonResult",
     "EvaluationResult",
     "EvaluationRunner",
+    "EquivalenceDirectionResult",
     "FormalizationBenchmark",
     "FormalizationEvaluationResult",
     "FormalizationEvaluationRunner",
@@ -43,6 +49,8 @@ __all__ = [
     "ProofAgent",
     "RunResult",
     "SemanticReview",
+    "SemanticEquivalenceChecker",
+    "SemanticEquivalenceResult",
     "TokenUsage",
     "VerificationResult",
     "compare_evaluations",
