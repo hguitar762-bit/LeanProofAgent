@@ -29,3 +29,5 @@ jobs:
         run: python examples/mock_repair_demo.py
       - name: Offline autoformalization demo
         run: python examples/mock_autoformalization_demo.py
+      - name: Offline formalization evaluation demo
+        run: python examples/mock_formalization_evaluation_demo.py

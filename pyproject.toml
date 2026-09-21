@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lean-proof-agent"
-version = "0.4.0"
-description = "Lean-verified proof repair and natural-language autoformalization"
+version = "0.5.0"
+description = "Lean-verified proof repair and semantic autoformalization evaluation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

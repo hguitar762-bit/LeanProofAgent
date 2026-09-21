@@ -1,0 +1,331 @@
+[
+  {
+    "id": "arith_add_zero",
+    "natural_language": "For every natural number n, adding zero to n gives n.",
+    "reference_statement": "theorem arith_add_zero (n : ℕ) : n + 0 = n",
+    "imports": ["Mathlib"],
+    "category": "arithmetic",
+    "assumptions": ["n is a natural number"],
+    "ambiguity_notes": "The domain and quantifier are explicit."
+  },
+  {
+    "id": "arith_zero_add",
+    "natural_language": "For every integer z, zero plus z equals z.",
+    "reference_statement": "theorem arith_zero_add (z : ℤ) : 0 + z = z",
+    "imports": ["Mathlib"],
+    "category": "arithmetic",
+    "assumptions": ["z is an integer"],
+    "ambiguity_notes": "The domain and quantifier are explicit."
+  },
+  {
+    "id": "arith_succ_eq_add_one",
+    "natural_language": "The successor of every natural number n is n plus one.",
+    "reference_statement": "theorem arith_succ_eq_add_one (n : ℕ) : Nat.succ n = n + 1",
+    "imports": ["Mathlib"],
+    "category": "arithmetic",
+    "assumptions": ["n is a natural number"],
+    "ambiguity_notes": "Successor means Nat.succ."
+  },
+  {
+    "id": "arith_int_sub_self",
+    "natural_language": "Every integer minus itself is zero.",
+    "reference_statement": "theorem arith_int_sub_self (z : ℤ) : z - z = 0",
+    "imports": ["Mathlib"],
+    "category": "arithmetic",
+    "assumptions": ["z is an integer"],
+    "ambiguity_notes": "The statement quantifies universally over integers."
+  },
+  {
+    "id": "arith_nat_add_assoc",
+    "natural_language": "Natural-number addition is associative: for all a, b, and c, (a + b) + c equals a + (b + c).",
+    "reference_statement": "theorem arith_nat_add_assoc (a b c : ℕ) : (a + b) + c = a + (b + c)",
+    "imports": ["Mathlib"],
+    "category": "arithmetic",
+    "assumptions": ["a, b, and c are natural numbers"],
+    "ambiguity_notes": "Both parenthesizations are explicit."
+  },
+  {
+    "id": "arith_even_double",
+    "natural_language": "Twice any integer is even.",
+    "reference_statement": "theorem arith_even_double (z : ℤ) : Even (2 * z)",
+    "imports": ["Mathlib"],
+    "category": "arithmetic",
+    "assumptions": ["z is an integer"],
+    "ambiguity_notes": "Evenness uses Mathlib's existential predicate Even."
+  },
+
+  {
+    "id": "algebra_real_mul_comm",
+    "natural_language": "For all real numbers x and y, x times y equals y times x.",
+    "reference_statement": "theorem algebra_real_mul_comm (x y : ℝ) : x * y = y * x",
+    "imports": ["Mathlib"],
+    "category": "algebra",
+    "assumptions": ["x and y are real numbers"],
+    "ambiguity_notes": "The real-number domain is explicit."
+  },
+  {
+    "id": "algebra_real_distrib",
+    "natural_language": "For all real numbers x, y, and z, x times (y plus z) equals x times y plus x times z.",
+    "reference_statement": "theorem algebra_real_distrib (x y z : ℝ) : x * (y + z) = x * y + x * z",
+    "imports": ["Mathlib"],
+    "category": "algebra",
+    "assumptions": ["x, y, and z are real numbers"],
+    "ambiguity_notes": "The distribution direction and grouping are explicit."
+  },
+  {
+    "id": "algebra_add_neg",
+    "natural_language": "For every real number x, x plus its additive inverse is zero.",
+    "reference_statement": "theorem algebra_add_neg (x : ℝ) : x + (-x) = 0",
+    "imports": ["Mathlib"],
+    "category": "algebra",
+    "assumptions": ["x is a real number"],
+    "ambiguity_notes": "Additive inverse is represented by unary negation."
+  },
+  {
+    "id": "algebra_square_sum",
+    "natural_language": "For all real x and y, the square of x plus y is x squared plus twice x times y plus y squared.",
+    "reference_statement": "theorem algebra_square_sum (x y : ℝ) : (x + y) ^ 2 = x ^ 2 + 2 * x * y + y ^ 2",
+    "imports": ["Mathlib"],
+    "category": "algebra",
+    "assumptions": ["x and y are real numbers"],
+    "ambiguity_notes": "The phrase 'square of x plus y' is intended as the square of the sum, as stated explicitly by the rest of the sentence."
+  },
+  {
+    "id": "algebra_mul_inv_cancel",
+    "natural_language": "For every nonzero real number x, x multiplied by its reciprocal equals one.",
+    "reference_statement": "theorem algebra_mul_inv_cancel (x : ℝ) (hx : x ≠ 0) : x * x⁻¹ = 1",
+    "imports": ["Mathlib"],
+    "category": "algebra",
+    "assumptions": ["x is real", "x is nonzero"],
+    "ambiguity_notes": "The nonzero condition is essential and must not be omitted."
+  },
+  {
+    "id": "algebra_eq_of_add_eq_add_left",
+    "natural_language": "For real numbers a, b, and c, if a + b equals a + c, then b equals c.",
+    "reference_statement": "theorem algebra_eq_of_add_eq_add_left (a b c : ℝ) (h : a + b = a + c) : b = c",
+    "imports": ["Mathlib"],
+    "category": "algebra",
+    "assumptions": ["a, b, and c are real numbers", "a + b = a + c"],
+    "ambiguity_notes": "The implication direction is explicit."
+  },
+
+  {
+    "id": "logic_and_comm",
+    "natural_language": "For propositions P and Q, P and Q holds if and only if Q and P holds.",
+    "reference_statement": "theorem logic_and_comm (P Q : Prop) : (P ∧ Q) ↔ (Q ∧ P)",
+    "imports": ["Mathlib"],
+    "category": "logic",
+    "assumptions": ["P and Q are propositions"],
+    "ambiguity_notes": "The biconditional is explicit."
+  },
+  {
+    "id": "logic_or_assoc",
+    "natural_language": "For propositions P, Q, and R, (P or Q) or R is equivalent to P or (Q or R).",
+    "reference_statement": "theorem logic_or_assoc (P Q R : Prop) : ((P ∨ Q) ∨ R) ↔ (P ∨ (Q ∨ R))",
+    "imports": ["Mathlib"],
+    "category": "logic",
+    "assumptions": ["P, Q, and R are propositions"],
+    "ambiguity_notes": "Both groupings are explicit."
+  },
+  {
+    "id": "logic_modus_ponens",
+    "natural_language": "If P implies Q and P holds, then Q holds.",
+    "reference_statement": "theorem logic_modus_ponens (P Q : Prop) (hpq : P → Q) (hp : P) : Q",
+    "imports": ["Mathlib"],
+    "category": "logic",
+    "assumptions": ["P and Q are propositions", "P implies Q", "P holds"],
+    "ambiguity_notes": "The hypotheses and conclusion are explicit."
+  },
+  {
+    "id": "logic_implication_trans",
+    "natural_language": "If P implies Q and Q implies R, then P implies R.",
+    "reference_statement": "theorem logic_implication_trans (P Q R : Prop) (hpq : P → Q) (hqr : Q → R) : P → R",
+    "imports": ["Mathlib"],
+    "category": "logic",
+    "assumptions": ["P, Q, and R are propositions", "P implies Q", "Q implies R"],
+    "ambiguity_notes": "The implication directions are explicit."
+  },
+  {
+    "id": "logic_contraposition",
+    "natural_language": "For propositions P and Q, if P implies Q, then not Q implies not P.",
+    "reference_statement": "theorem logic_contraposition (P Q : Prop) (h : P → Q) : ¬Q → ¬P",
+    "imports": ["Mathlib"],
+    "category": "logic",
+    "assumptions": ["P and Q are propositions", "P implies Q"],
+    "ambiguity_notes": "This states only the forward contraposition theorem."
+  },
+  {
+    "id": "logic_iff_symm",
+    "natural_language": "For propositions P and Q, if P is equivalent to Q, then Q is equivalent to P.",
+    "reference_statement": "theorem logic_iff_symm (P Q : Prop) (h : P ↔ Q) : Q ↔ P",
+    "imports": ["Mathlib"],
+    "category": "logic",
+    "assumptions": ["P and Q are propositions", "P is equivalent to Q"],
+    "ambiguity_notes": "Equivalence means logical if and only if."
+  },
+
+  {
+    "id": "ineq_square_nonnegative",
+    "natural_language": "The square of every real number is nonnegative.",
+    "reference_statement": "theorem ineq_square_nonnegative (x : ℝ) : 0 ≤ x ^ 2",
+    "imports": ["Mathlib"],
+    "category": "inequalities",
+    "assumptions": ["x is a real number"],
+    "ambiguity_notes": "Nonnegative includes zero."
+  },
+  {
+    "id": "ineq_add_nonnegative",
+    "natural_language": "If real numbers x and y are both nonnegative, then x + y is nonnegative.",
+    "reference_statement": "theorem ineq_add_nonnegative (x y : ℝ) (hx : 0 ≤ x) (hy : 0 ≤ y) : 0 ≤ x + y",
+    "imports": ["Mathlib"],
+    "category": "inequalities",
+    "assumptions": ["x and y are real", "0 ≤ x", "0 ≤ y"],
+    "ambiguity_notes": "Both nonnegativity assumptions are essential."
+  },
+  {
+    "id": "ineq_le_trans",
+    "natural_language": "For real numbers x, y, and z, if x ≤ y and y ≤ z, then x ≤ z.",
+    "reference_statement": "theorem ineq_le_trans (x y z : ℝ) (hxy : x ≤ y) (hyz : y ≤ z) : x ≤ z",
+    "imports": ["Mathlib"],
+    "category": "inequalities",
+    "assumptions": ["x, y, and z are real", "x ≤ y", "y ≤ z"],
+    "ambiguity_notes": "The order relation and direction are explicit."
+  },
+  {
+    "id": "ineq_abs_nonnegative",
+    "natural_language": "The absolute value of every real number is nonnegative.",
+    "reference_statement": "theorem ineq_abs_nonnegative (x : ℝ) : 0 ≤ |x|",
+    "imports": ["Mathlib"],
+    "category": "inequalities",
+    "assumptions": ["x is a real number"],
+    "ambiguity_notes": "Absolute value is the real absolute value."
+  },
+  {
+    "id": "ineq_lt_of_lt_of_le",
+    "natural_language": "For real x, y, and z, if x < y and y ≤ z, then x < z.",
+    "reference_statement": "theorem ineq_lt_of_lt_of_le (x y z : ℝ) (hxy : x < y) (hyz : y ≤ z) : x < z",
+    "imports": ["Mathlib"],
+    "category": "inequalities",
+    "assumptions": ["x, y, and z are real", "x < y", "y ≤ z"],
+    "ambiguity_notes": "Strict and non-strict inequalities are distinguished."
+  },
+  {
+    "id": "ineq_nat_le_add",
+    "natural_language": "For natural numbers m and n, m is at most m + n.",
+    "reference_statement": "theorem ineq_nat_le_add (m n : ℕ) : m ≤ m + n",
+    "imports": ["Mathlib"],
+    "category": "inequalities",
+    "assumptions": ["m and n are natural numbers"],
+    "ambiguity_notes": "Natural-number nonnegativity makes the conclusion valid."
+  },
+
+  {
+    "id": "sets_union_comm",
+    "natural_language": "For sets A and B of elements of the same type, A union B equals B union A.",
+    "reference_statement": "theorem sets_union_comm {α : Type} (A B : Set α) : A ∪ B = B ∪ A",
+    "imports": ["Mathlib"],
+    "category": "sets",
+    "assumptions": ["A and B are sets over the same type α"],
+    "ambiguity_notes": "Set equality, not merely one inclusion, is required."
+  },
+  {
+    "id": "sets_inter_subset_left",
+    "natural_language": "The intersection of sets A and B is a subset of A.",
+    "reference_statement": "theorem sets_inter_subset_left {α : Type} (A B : Set α) : A ∩ B ⊆ A",
+    "imports": ["Mathlib"],
+    "category": "sets",
+    "assumptions": ["A and B are sets over the same type α"],
+    "ambiguity_notes": "The conclusion is subset inclusion."
+  },
+  {
+    "id": "sets_mem_union_left",
+    "natural_language": "If x belongs to A, then x belongs to A union B.",
+    "reference_statement": "theorem sets_mem_union_left {α : Type} (A B : Set α) (x : α) (hx : x ∈ A) : x ∈ A ∪ B",
+    "imports": ["Mathlib"],
+    "category": "sets",
+    "assumptions": ["A and B are sets over α", "x ∈ A"],
+    "ambiguity_notes": "Membership in A is an assumption, not a biconditional."
+  },
+  {
+    "id": "sets_diff_membership",
+    "natural_language": "If x belongs to A and does not belong to B, then x belongs to A set-minus B.",
+    "reference_statement": "theorem sets_diff_membership {α : Type} (A B : Set α) (x : α) (hA : x ∈ A) (hB : x ∉ B) : x ∈ A \\ B",
+    "imports": ["Mathlib"],
+    "category": "sets",
+    "assumptions": ["A and B are sets over α", "x ∈ A", "x ∉ B"],
+    "ambiguity_notes": "Set difference is A \\ B, in that direction."
+  },
+  {
+    "id": "sets_preimage_inter",
+    "natural_language": "For a function f and sets A and B in its codomain, the preimage of A intersection B equals the intersection of the preimages of A and B.",
+    "reference_statement": "theorem sets_preimage_inter {α β : Type} (f : α → β) (A B : Set β) : f ⁻¹' (A ∩ B) = f ⁻¹' A ∩ f ⁻¹' B",
+    "imports": ["Mathlib"],
+    "category": "sets",
+    "assumptions": ["f maps α to β", "A and B are subsets of β"],
+    "ambiguity_notes": "Preimage, not image, is intended."
+  },
+  {
+    "id": "sets_subset_trans",
+    "natural_language": "If A is a subset of B and B is a subset of C, then A is a subset of C.",
+    "reference_statement": "theorem sets_subset_trans {α : Type} (A B C : Set α) (hAB : A ⊆ B) (hBC : B ⊆ C) : A ⊆ C",
+    "imports": ["Mathlib"],
+    "category": "sets",
+    "assumptions": ["A, B, and C are sets over α", "A ⊆ B", "B ⊆ C"],
+    "ambiguity_notes": "The inclusion direction is explicit."
+  },
+
+  {
+    "id": "func_id_apply",
+    "natural_language": "The identity function sends every element x to x.",
+    "reference_statement": "theorem func_id_apply {α : Type} (x : α) : id x = x",
+    "imports": ["Mathlib"],
+    "category": "functions",
+    "assumptions": ["x has type α"],
+    "ambiguity_notes": "Identity is the polymorphic function id."
+  },
+  {
+    "id": "func_comp_apply",
+    "natural_language": "For functions f and g and an input x, applying the composition f after g to x equals f applied to g applied to x.",
+    "reference_statement": "theorem func_comp_apply {α β γ : Type} (f : β → γ) (g : α → β) (x : α) : (f ∘ g) x = f (g x)",
+    "imports": ["Mathlib"],
+    "category": "functions",
+    "assumptions": ["g maps α to β", "f maps β to γ", "x has type α"],
+    "ambiguity_notes": "'f after g' fixes the composition order."
+  },
+  {
+    "id": "func_injective_comp",
+    "natural_language": "The composition of an injective function g with an injective function f is injective, where f is applied first and g second.",
+    "reference_statement": "theorem func_injective_comp {α β γ : Type} (f : α → β) (g : β → γ) (hf : Function.Injective f) (hg : Function.Injective g) : Function.Injective (g ∘ f)",
+    "imports": ["Mathlib"],
+    "category": "functions",
+    "assumptions": ["f maps α to β and is injective", "g maps β to γ and is injective"],
+    "ambiguity_notes": "The application order is stated to avoid composition-order ambiguity."
+  },
+  {
+    "id": "func_surjective_comp",
+    "natural_language": "If f from α to β and g from β to γ are both surjective, then g composed with f is surjective.",
+    "reference_statement": "theorem func_surjective_comp {α β γ : Type} (f : α → β) (g : β → γ) (hf : Function.Surjective f) (hg : Function.Surjective g) : Function.Surjective (g ∘ f)",
+    "imports": ["Mathlib"],
+    "category": "functions",
+    "assumptions": ["f is surjective", "g is surjective"],
+    "ambiguity_notes": "The types determine the composition order."
+  },
+  {
+    "id": "func_left_inverse_injective",
+    "natural_language": "If g is a left inverse of f, then f is injective.",
+    "reference_statement": "theorem func_left_inverse_injective {α β : Type} (f : α → β) (g : β → α) (h : Function.LeftInverse g f) : Function.Injective f",
+    "imports": ["Mathlib"],
+    "category": "functions",
+    "assumptions": ["f maps α to β", "g maps β to α", "g is a left inverse of f"],
+    "ambiguity_notes": "Left inverse means g (f x) = x; reversing it would change the theorem."
+  },
+  {
+    "id": "func_extensionality",
+    "natural_language": "Two functions f and g from α to β are equal if they have equal values at every input.",
+    "reference_statement": "theorem func_extensionality {α β : Type} (f g : α → β) (h : ∀ x, f x = g x) : f = g",
+    "imports": ["Mathlib"],
+    "category": "functions",
+    "assumptions": ["f and g have type α → β", "for every x, f x = g x"],
+    "ambiguity_notes": "Equality is function equality and the pointwise premise is universal."
+  }
+]

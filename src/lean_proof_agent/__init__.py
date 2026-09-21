@@ -8,6 +8,12 @@ from .formalization import (
     AutoformalizationResult,
     NaturalLanguageProblem,
 )
+from .formalization_benchmarks import FormalizationBenchmark
+from .formalization_evaluation import (
+    FormalizationEvaluationResult,
+    FormalizationEvaluationRunner,
+    SemanticReview,
+)
 from .llm import LLMBackend
 from .models import (
     AttemptRecord,
@@ -26,6 +32,9 @@ __all__ = [
     "ComparisonResult",
     "EvaluationResult",
     "EvaluationRunner",
+    "FormalizationBenchmark",
+    "FormalizationEvaluationResult",
+    "FormalizationEvaluationRunner",
     "GenerationResult",
     "LeanProblem",
     "LeanVerifier",
@@ -33,6 +42,7 @@ __all__ = [
     "NaturalLanguageProblem",
     "ProofAgent",
     "RunResult",
+    "SemanticReview",
     "TokenUsage",
     "VerificationResult",
     "compare_evaluations",

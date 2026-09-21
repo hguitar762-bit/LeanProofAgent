@@ -17,6 +17,12 @@ from .benchmarks import (
 from .comparison import compare_evaluations, render_terminal, write_comparison
 from .evaluation import EvaluationRunner, render_markdown
 from .formalization import AutoformalizationAgent, NaturalLanguageProblem
+from .formalization_benchmarks import load_formalization_benchmarks
+from .formalization_evaluation import (
+    FormalizationEvaluationRunner,
+    load_semantic_reviews,
+    render_formalization_markdown,
+)
 from .llm import LLMBackend
 from .models import LeanProblem
 from .offline_backend import OfflineMockBackend
@@ -102,6 +108,37 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--project-root", type=Path, default=Path.cwd())
     evaluate.add_argument("--timeout", type=float, default=120.0)
     evaluate.set_defaults(handler=_evaluate)
+
+    evaluate_formalization = subcommands.add_parser(
+        "evaluate-formalization",
+        help="evaluate natural-language to Lean statement generation",
+    )
+    evaluate_formalization.add_argument(
+        "--benchmark",
+        type=Path,
+        default=Path("benchmarks/formalization"),
+        help="curated formalization benchmark JSON file or directory",
+    )
+    evaluate_formalization.add_argument(
+        "--reviews",
+        type=Path,
+        help="independent human semantic review JSON from a prior evaluation",
+    )
+    evaluate_formalization.add_argument(
+        "--model",
+        default=os.environ.get("OPENAI_MODEL", "gpt-5.5"),
+        help="OpenAI model (default: OPENAI_MODEL or gpt-5.5)",
+    )
+    evaluate_formalization.add_argument(
+        "--max-formalization-attempts", type=int, default=3
+    )
+    evaluate_formalization.add_argument("--max-attempts", type=int, default=3)
+    evaluate_formalization.add_argument(
+        "--output-dir", type=Path, default=Path("formalization_evaluations")
+    )
+    evaluate_formalization.add_argument("--project-root", type=Path, default=Path.cwd())
+    evaluate_formalization.add_argument("--timeout", type=float, default=120.0)
+    evaluate_formalization.set_defaults(handler=_evaluate_formalization)
 
     compare = subcommands.add_parser(
         "compare", help="compare two saved evaluation.json files"
@@ -246,6 +283,28 @@ def _evaluation_backend(name: str, model: str) -> LLMBackend:
     if name == "mock":
         return OfflineMockBackend()
     return OpenAIBackend(model)
+
+
+def _evaluate_formalization(args: argparse.Namespace) -> int:
+    problems = load_formalization_benchmarks(args.benchmark)
+    reviews = load_semantic_reviews(args.reviews) if args.reviews else None
+    verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
+    result = FormalizationEvaluationRunner(
+        OpenAIBackend(args.model),
+        verifier,
+        verifier,
+        max_formalization_attempts=args.max_formalization_attempts,
+        max_proof_attempts=args.max_attempts,
+        output_root=args.output_dir,
+        backend_name="openai",
+        model=args.model,
+        reviews=reviews,
+    ).run(problems)
+    print(render_formalization_markdown(result), end="")
+    print(f"JSON: {result.evaluation_dir / 'evaluation.json'}")
+    print(f"Markdown: {result.evaluation_dir / 'summary.md'}")
+    print(f"Semantic review file: {result.evaluation_dir / 'semantic_reviews.json'}")
+    return 0
 
 
 def _compare(args: argparse.Namespace) -> int:

@@ -3,9 +3,9 @@
 LeanProofAgent is a small, executable framework for **kernel-checked mathematical
 reasoning**. An LLM proposes a Lean 4 proof; Lean checks it against Mathlib. If
 Lean rejects the proof, the agent sends the exact compiler feedback back to the
-LLM and tries again, up to a fixed limit. Version 0.4 adds a compiler-guided
-natural-language autoformalization stage without changing that trusted proof
-loop.
+LLM and tries again, up to a fixed limit. Version 0.5 adds a curated
+autoformalization benchmark and separates syntactic validity, provability, and
+human-reviewed semantic correctness without changing that trusted proof loop.
 
 ```text
 natural-language proposition
@@ -48,6 +48,11 @@ Included:
   and per-theorem regression analysis.
 - Natural-language-to-Lean theorem generation with bounded, compiler-guided
   statement repair before the existing proof loop begins.
+- A 36-problem, human-reviewed natural-language/reference-statement benchmark
+  covering arithmetic, algebra, logic, inequalities, sets, and functions.
+- Autoformalization evaluation with statement elaboration, repair, proof,
+  conservative comparison, failure-category, JSON, Markdown, and independent
+  semantic-review artifacts.
 - Three small natural-language benchmarks covering arithmetic, logic, and
   algebra, plus an offline end-to-end autoformalization demo.
 - Twenty theorem-only benchmarks across arithmetic, algebra, logic, lists,
@@ -73,10 +78,13 @@ src/lean_proof_agent/
 ├── evaluation.py       sequential runner, metrics, JSON, and Markdown
 ├── comparison.py       saved-run deltas and per-theorem regressions
 ├── formalization.py    text → theorem generation and Lean-guided repair
+├── formalization_benchmarks.py  curated pair schema and loader
+├── formalization_evaluation.py  statement/proof/semantic evaluation reports
 ├── text_benchmarks.py  natural-language benchmark loader
 └── cli.py              `lean-proof` command
 
 benchmarks/             statements and metadata, never solutions
+benchmarks/formalization/  reviewed natural-language/reference pairs
 text_benchmarks/        natural-language propositions, never formalizations
 examples/               offline mock-LLM repair demo
 tests/                  unit tests plus real-Lean integration tests
@@ -310,6 +318,61 @@ optional token usage, and the associated ProofAgent artifact directory.
 The top-level result also records the backend, model, and maximum attempt limit
 needed to interpret or compare a run.
 
+## Autoformalization benchmark and semantic evaluation
+
+Run the complete curated suite through statement generation, Lean elaboration,
+and the unchanged proof agent:
+
+```bash
+lean-proof evaluate-formalization --benchmark benchmarks/formalization
+```
+
+The 36 benchmark entries are balanced across arithmetic, algebra, logic,
+inequalities, sets, and functions. Every entry contains `id`,
+`natural_language`, `reference_statement`, `imports`, `category`, `assumptions`,
+and `ambiguity_notes`. Reference statements are reviewed targets, not answers
+available to the generation prompt.
+
+The evaluator reports these distinct quantities:
+
+- **Well formed:** a generated statement passed safety checks and Lean syntax,
+  name, type, and proposition elaboration.
+- **Provable / proof verified:** the existing `ProofAgent` produced a proof that
+  a real `lake env lean` invocation accepted.
+- **Semantically correct:** only a human review of fidelity to the original
+  natural language can set this to true or false.
+- **Statement syntax/type success rate:** well-formed statements divided by all
+  benchmark problems.
+- **Repair success rate:** initially rejected statements that became well formed
+  on a later bounded attempt, divided by problems where repair was attempted.
+- **Average formalization attempts:** generated statement attempts per problem.
+- **End-to-end proof verification rate:** problems with both an elaborated
+  statement and a kernel-accepted generated proof, divided by all problems.
+
+`comparison` is deliberately conservative. It is `exact_match` only when the
+generated and reference declarations match after theorem-name and whitespace
+normalization. Every other case is `unknown`; the evaluator never turns failure
+to prove equivalence into a claim of non-equivalence. Even `exact_match` does
+not automatically set semantic correctness.
+
+Every run writes `evaluation.json`, `summary.md`, per-problem generation/proof
+artifacts, and a separate `semantic_reviews.json`. Edit only that review file,
+using `correct`, `incorrect`, `ambiguous`, or `unreviewed`, then apply it to a
+later run:
+
+```bash
+lean-proof evaluate-formalization \
+  --benchmark benchmarks/formalization \
+  --reviews previous-run/semantic_reviews.json
+```
+
+Incorrect or ambiguous reviews can use the controlled categories `missing
+assumption`, `stronger statement`, `weaker statement`, `wrong quantifier`,
+`wrong type/domain`, `wrong implication direction`, and `ambiguity`. Automated
+execution can additionally report `Lean elaboration failure`, `proof
+verification failure`, or `backend failure`. The benchmark source is never
+modified by review writeback.
+
 ## Compare Evaluations
 
 Compare any two saved evaluation results, for example runs made with different
@@ -382,13 +445,16 @@ returns a repair. Both attempts still go through the real Lean compiler.
 ```bash
 python examples/mock_repair_demo.py
 python examples/mock_autoformalization_demo.py
+python examples/mock_formalization_evaluation_demo.py
 ```
 
 The autoformalization demo exercises the complete offline sequence with a mock
 model and real Lean: natural language → invalid statement → Lean feedback →
 repaired statement → `ProofAgent` → verified proof. These are test fixtures,
-not benchmark solvers. Production CLI runs use the LLM backend and benchmark
-files contain no answers.
+not benchmark solvers. The v0.5 evaluation demo additionally writes and checks
+the JSON, Markdown, and independent semantic-review workflow. Production CLI
+runs use the LLM backend; no backend contains a lookup table of benchmark
+answers, and reference statements are never placed in model prompts.
 
 ## Run artifacts
 
@@ -462,6 +528,10 @@ reach Lean, invalid statements receive compiler-guided repair, final statements
 flow through the existing `ProofAgent`, and the original text, each statement,
 Lean feedback, proof attempts, and verified proof are persisted.
 
+Semantic-evaluation tests validate the 36-pair schema and category balance,
+unknown-on-unproved comparison behavior, human review isolation, aggregate
+metrics and reports, and real-Lean elaboration of every reference statement.
+
 CI performs `lake update`, downloads the Mathlib cache, installs Python 3.11,
 runs pytest, and executes the offline repair demo. Evaluation tests use mock
 backends and never call a paid API; a Lean-marked integration test confirms that
@@ -476,6 +546,9 @@ evaluation success still comes from the real compiler.
 - The formalizer currently uses `Mathlib`, a single theorem declaration, and a
   simple full-error retry prompt; it does not ask clarifying questions about
   ambiguous source text.
+- Conservative statement comparison recognizes only normalized exact matches.
+  Logically equivalent statements with different syntax remain `unknown` until
+  a stronger trusted equivalence check or human review is supplied.
 - Generation is synchronous and uses a simple full-error retry prompt. There is
   no streaming, parallel search, or proof minimization.
 - Lexical blocking covers explicit proof holes and axiom declarations, but the
@@ -489,10 +562,10 @@ evaluation success still comes from the real compiler.
 
 ## Best next step
 
-Develop semantic-alignment evaluation for autoformalization: curated pairs of
-natural-language propositions and reviewed Lean statements, including ambiguous
-and adversarial cases. This would measure meaning preservation separately from
-the already-enforced syntax, type, and proof checks.
+Study trusted, conservative equivalence checking for differently shaped Lean
+propositions, especially quantifier/domain changes and missing assumptions,
+while preserving `unknown` whenever equivalence or non-equivalence is not
+established.
 
 ## License
 
