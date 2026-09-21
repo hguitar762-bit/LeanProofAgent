@@ -20,6 +20,9 @@ runs/
 evaluations/
 comparisons/
 autoformalizations/
+formalization_evaluations/
+equivalence_checks/
+experiments/*/artifacts/
 .env
 .env.*
 !.env.example

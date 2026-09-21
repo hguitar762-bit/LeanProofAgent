@@ -14,7 +14,8 @@ from lean_proof_agent.formalization_evaluation import (
     load_semantic_reviews,
     render_formalization_markdown,
 )
-from lean_proof_agent.models import VerificationResult
+from lean_proof_agent.experiment_reporting import write_experiment_bundle
+from lean_proof_agent.models import GenerationResult, TokenUsage, VerificationResult
 from lean_proof_agent.verifier import LeanVerifier
 
 
@@ -28,6 +29,14 @@ class SequenceBackend:
 
     def generate(self, *, system_prompt: str, user_prompt: str) -> str:
         return next(self.responses)
+
+
+class UsageSequenceBackend(SequenceBackend):
+    def generate(self, *, system_prompt: str, user_prompt: str) -> GenerationResult:
+        return GenerationResult(
+            super().generate(system_prompt=system_prompt, user_prompt=user_prompt),
+            TokenUsage(1, 2, 3),
+        )
 
 
 class FixtureVerifier:
@@ -63,7 +72,7 @@ def test_evaluation_separates_well_formed_proof_and_human_semantics(
     tmp_path: Path,
 ) -> None:
     benchmark = load_formalization_benchmarks(BENCHMARK_DIR)[0]
-    backend = SequenceBackend(
+    backend = UsageSequenceBackend(
         [
             f"theorem {benchmark.id} (n : ℕ) : n + missing_symbol = n",
             benchmark.reference_statement,
@@ -96,16 +105,78 @@ def test_evaluation_separates_well_formed_proof_and_human_semantics(
     assert item.repair_attempted is True
     assert item.repair_succeeded is True
     assert result.statement_success_rate == 1
+    assert result.first_formalization_success_rate == 0
+    assert result.formalization_repair_gain_count == 1
+    assert result.formalization_repair_gain_percentage_points == 100
     assert result.repair_success_rate == 1
     assert result.average_formalization_attempts == 2
     assert result.end_to_end_proof_verification_rate == 1
+    assert result.first_proof_success_rate == 1
+    assert result.proof_repair_gain_count == 0
+    assert result.average_proof_attempts == 1
     assert result.equivalent_problems == 1
+    assert result.semantic_equivalence_rate == 1
+    assert result.semantic_unknown_rate == 0
+    assert result.token_usage == TokenUsage(5, 10, 15)
+    assert result.token_usage_reported_attempts == 5
     assert "human review only" in render_formalization_markdown(result)
     assert (result.evaluation_dir / "evaluation.json").is_file()
     assert (result.evaluation_dir / "summary.md").is_file()
     review_path = result.evaluation_dir / "semantic_reviews.json"
     assert review_path.is_file()
     assert load_semantic_reviews(review_path)[benchmark.id].semantic_review == "unreviewed"
+
+    experiment_dir = tmp_path / "experiment"
+    experiment_dir.mkdir()
+    write_experiment_bundle(
+        result,
+        experiment_dir,
+        {
+            "timestamp_utc": "2026-09-21T00:00:00+00:00",
+            "git_commit": "abc123",
+            "backend": "fixture",
+            "model": "fixture-model",
+        },
+    )
+    assert (experiment_dir / "config.json").is_file()
+    assert (experiment_dir / "results.json").is_file()
+    assert "Formalization repair gain: +1" in (
+        experiment_dir / "summary.md"
+    ).read_text("utf-8")
+    assert (experiment_dir / "failures.md").is_file()
+
+
+def test_evaluation_measures_proof_repair_gain(tmp_path: Path) -> None:
+    benchmark = load_formalization_benchmarks(BENCHMARK_DIR)[0]
+    backend = SequenceBackend(
+        [
+            benchmark.reference_statement,
+            "by\n  exact missing_symbol",
+            "by\n  simp",
+            "by\n  simp",
+            "by\n  simp",
+        ]
+    )
+    verifier = FixtureVerifier()
+    result = FormalizationEvaluationRunner(
+        backend,
+        verifier,
+        verifier,
+        max_formalization_attempts=1,
+        max_proof_attempts=2,
+        max_equivalence_attempts=1,
+        output_root=tmp_path,
+    ).run((benchmark,))
+
+    item = result.problems[0]
+    assert item.first_proof_verified is False
+    assert item.proof_repair_attempted is True
+    assert item.proof_repair_succeeded is True
+    assert item.proof_attempts == 2
+    assert result.first_proof_success_rate == 0
+    assert result.end_to_end_proof_verification_rate == 1
+    assert result.proof_repair_gain_count == 1
+    assert result.proof_repair_gain_percentage_points == 100
 
 
 def test_nonmatching_statements_are_unknown_not_inequivalent() -> None:

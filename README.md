@@ -508,6 +508,21 @@ the JSON, Markdown, and independent semantic-review workflow. Production CLI
 runs use the LLM backend; no backend contains a lookup table of benchmark
 answers, and reference statements are never placed in model prompts.
 
+## Real-model experiment
+
+The reproducible experiment runner uses only the real OpenAI backend and refuses
+to run without `OPENAI_API_KEY`:
+
+```bash
+python examples/run_real_model_experiment.py --name real_model_baseline_001
+```
+
+Run the documented five-problem smoke test before the full 36-problem baseline.
+Configuration, complete results, summary metrics, and categorized failures are
+written under `experiments/<name>/`; raw per-attempt artifacts are retained
+locally but ignored by Git. See [EXPERIMENTS.md](EXPERIMENTS.md) for exact
+PowerShell commands, metric denominators, and the current execution status.
+
 ## Run artifacts
 
 Every invocation gets a unique UTC-stamped directory under `runs/` (or the path
