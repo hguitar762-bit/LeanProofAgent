@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from lean_proof_agent.agent import ProofAgent
-from lean_proof_agent.models import LeanProblem, VerificationResult
+from lean_proof_agent.models import GenerationResult, LeanProblem, VerificationResult
 
 
 class RepeatingLLM:
@@ -66,3 +67,22 @@ def test_unsafe_proof_is_failed_without_invoking_lean(tmp_path: Path) -> None:
     assert verifier.calls == 0
     assert result.attempts[0].verification.command == ()
     assert "forbidden token" in result.attempts[0].verification.compiler_feedback
+
+
+def test_agent_persists_provider_length_finish_reason(tmp_path: Path) -> None:
+    class LengthLimitedLLM:
+        def generate(self, *, system_prompt: str, user_prompt: str):
+            return GenerationResult("by\n  exact", finish_reason="length")
+
+    result = ProofAgent(
+        LengthLimitedLLM(),
+        AlwaysFailVerifier(),
+        max_attempts=1,
+        artifacts_root=tmp_path,
+    ).solve(LeanProblem("limited", "theorem limited : True"))
+
+    payload = json.loads(
+        (result.run_dir / "attempt_01.json").read_text(encoding="utf-8")
+    )
+    assert payload["finish_reason"] == "length"
+    assert payload["truncated_by_token_limit"] is True

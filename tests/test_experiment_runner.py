@@ -20,9 +20,10 @@ def test_experiment_runner_supports_ollama_without_openai_key(
         def run(self, problems):
             return SimpleNamespace(total_problems=1, problems=())
 
-    def fake_create_backend(backend, model):
+    def fake_create_backend(backend, model, *, num_predict=None):
         captured["backend"] = backend
         captured["requested_model"] = model
+        captured["num_predict"] = num_predict
         return object(), "local-test-model"
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -46,6 +47,8 @@ def test_experiment_runner_supports_ollama_without_openai_key(
             "ollama",
             "--model",
             "local-test-model",
+            "--num-predict",
+            "2048",
             "--name",
             "local-smoke",
             "--experiments-root",
@@ -59,9 +62,12 @@ def test_experiment_runner_supports_ollama_without_openai_key(
     assert captured["backend"] == "ollama"
     assert captured["runner_backend_name"] == "ollama"
     assert captured["runner_model"] == "local-test-model"
+    assert captured["num_predict"] == 2048
     config = captured["config"]
     assert isinstance(config, dict)
     assert config["backend"] == "ollama-http"
     assert config["model"] == "local-test-model"
+    assert config["explicit_model_parameters"] == {"num_predict": 2048}
     saved = json.loads((tmp_path / "local-smoke" / "config.json").read_text("utf-8"))
     assert saved["status"] == "started"
+    assert saved["explicit_model_parameters"] == {"num_predict": 2048}

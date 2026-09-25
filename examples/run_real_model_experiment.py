@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ids", nargs="*", help="optional smoke-test problem ids")
     parser.add_argument("--backend", choices=("openai", "ollama"), default="openai")
     parser.add_argument("--model")
+    parser.add_argument(
+        "--num-predict",
+        type=int,
+        help="Ollama-only maximum generated tokens; omitted uses the model default",
+    )
     parser.add_argument("--max-formalization-attempts", type=int, default=3)
     parser.add_argument("--max-proof-attempts", type=int, default=3)
     parser.add_argument("--max-equivalence-attempts", type=int, default=2)
@@ -47,7 +52,9 @@ def main(argv: list[str] | None = None) -> int:
             "OPENAI_API_KEY is not set. Set it in the current process environment; "
             "the experiment runner never reads a .env file or stores the key."
         )
-    backend, model = create_backend(args.backend, args.model)
+    backend, model = create_backend(
+        args.backend, args.model, num_predict=args.num_predict
+    )
     all_problems = load_formalization_benchmarks(args.benchmark)
     problems = _select_problems(all_problems, args.ids)
     experiment_dir = args.experiments_root.resolve() / args.name
@@ -68,10 +75,18 @@ def main(argv: list[str] | None = None) -> int:
             _package_version("openai") if args.backend == "openai" else None
         ),
         "model": model,
-        "explicit_model_parameters": {},
+        "explicit_model_parameters": (
+            {"num_predict": args.num_predict}
+            if args.num_predict is not None
+            else {}
+        ),
         "model_parameter_note": (
-            "No temperature, reasoning, or max-output override is sent; backend "
-            "defaults apply. Ollama requests use system, prompt, and stream=false."
+            "Temperature and context length are not overridden. "
+            + (
+                f"Ollama num_predict is {args.num_predict}."
+                if args.num_predict is not None
+                else "Ollama num_predict uses the model default."
+            )
         ),
         "max_formalization_attempts": args.max_formalization_attempts,
         "max_proof_attempts": args.max_proof_attempts,

@@ -40,6 +40,8 @@ def write_attempt(run_dir: Path, record: AttemptRecord) -> None:
         "source_file": record.source_path.name,
         "generation_seconds": record.generation_seconds,
         "token_usage": asdict(record.token_usage) if record.token_usage else None,
+        "finish_reason": record.finish_reason,
+        "truncated_by_token_limit": record.finish_reason == "length",
         "verification": verification,
     }
     _write_json(run_dir / f"attempt_{record.number:02d}.json", payload)

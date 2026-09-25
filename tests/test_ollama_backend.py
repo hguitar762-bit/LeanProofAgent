@@ -40,14 +40,21 @@ class RecordingOpener:
 
 def test_ollama_generate_uses_nonstreaming_api_and_records_tokens() -> None:
     opener = RecordingOpener(
-        [{"response": "by\n  rfl", "prompt_eval_count": 12, "eval_count": 5}]
+        [
+            {
+                "response": "by\n  rfl",
+                "prompt_eval_count": 12,
+                "eval_count": 5,
+                "done_reason": "stop",
+            }
+        ]
     )
     backend = OllamaBackend(
         "qwen-test", base_url="localhost:11434/", opener=opener
     )
     output = backend.generate(system_prompt="system", user_prompt="user")
 
-    assert output == GenerationResult("by\n  rfl", TokenUsage(12, 5, 17))
+    assert output == GenerationResult("by\n  rfl", TokenUsage(12, 5, 17), "stop")
     request, timeout = opener.requests[0]
     assert request.full_url == "http://localhost:11434/api/generate"
     assert request.get_method() == "POST"
@@ -58,6 +65,31 @@ def test_ollama_generate_uses_nonstreaming_api_and_records_tokens() -> None:
         "prompt": "user",
         "stream": False,
     }
+
+
+def test_ollama_num_predict_is_optional_and_records_length_finish() -> None:
+    opener = RecordingOpener(
+        [
+            {
+                "response": "by\n  exact",
+                "prompt_eval_count": 3,
+                "eval_count": 2048,
+                "done_reason": "length",
+            }
+        ]
+    )
+    backend = OllamaBackend("qwen-test", num_predict=2048, opener=opener)
+
+    output = backend.generate(system_prompt="system", user_prompt="user")
+
+    assert output.finish_reason == "length"
+    request, _ = opener.requests[0]
+    assert json.loads(request.data)["options"] == {"num_predict": 2048}
+
+
+def test_ollama_num_predict_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="num_predict"):
+        OllamaBackend("qwen-test", num_predict=0)
 
 
 def test_ollama_usage_stays_unavailable_when_counts_are_missing() -> None:

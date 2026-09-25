@@ -80,9 +80,11 @@ class ProofAgent:
             if isinstance(generated, GenerationResult):
                 raw_response = generated.text
                 token_usage = generated.token_usage
+                finish_reason = generated.finish_reason
             elif isinstance(generated, str):
                 raw_response = generated
                 token_usage = None
+                finish_reason = None
             else:
                 raise TypeError("LLM backend must return str or GenerationResult")
             try:
@@ -108,12 +110,13 @@ class ProofAgent:
                 verification = self.verifier.verify(source_path)
 
             record = AttemptRecord(
-                number,
-                proof,
-                source_path,
-                verification,
-                generation_seconds,
-                token_usage,
+                number=number,
+                proof=proof,
+                source_path=source_path,
+                verification=verification,
+                generation_seconds=generation_seconds,
+                token_usage=token_usage,
+                finish_reason=finish_reason,
             )
             records.append(record)
             write_attempt(run_dir, record)

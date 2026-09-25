@@ -20,18 +20,22 @@ class OllamaBackend:
         *,
         base_url: str | None = None,
         timeout_seconds: float = 600.0,
+        num_predict: int | None = None,
         opener: Callable[..., Any] | None = None,
     ) -> None:
         if not model.strip():
             raise ValueError("Ollama model must not be empty")
         if timeout_seconds <= 0:
             raise ValueError("Ollama timeout must be positive")
+        if num_predict is not None and num_predict <= 0:
+            raise ValueError("Ollama num_predict must be positive")
         host = (base_url or os.environ.get("OLLAMA_HOST") or "http://localhost:11434")
         if "://" not in host:
             host = f"http://{host}"
         self.model = model
         self.base_url = host.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.num_predict = num_predict
         self._opener = opener or urlopen
 
     def check_available(self) -> None:
@@ -59,14 +63,15 @@ class OllamaBackend:
             )
 
     def generate(self, *, system_prompt: str, user_prompt: str) -> GenerationResult:
-        body = json.dumps(
-            {
-                "model": self.model,
-                "system": system_prompt,
-                "prompt": user_prompt,
-                "stream": False,
-            }
-        ).encode("utf-8")
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "system": system_prompt,
+            "prompt": user_prompt,
+            "stream": False,
+        }
+        if self.num_predict is not None:
+            payload["options"] = {"num_predict": self.num_predict}
+        body = json.dumps(payload).encode("utf-8")
         request = Request(
             f"{self.base_url}/api/generate",
             data=body,
@@ -77,7 +82,12 @@ class OllamaBackend:
         text = payload.get("response")
         if not isinstance(text, str) or not text.strip():
             raise RuntimeError("Ollama response did not contain generated text")
-        return GenerationResult(text=text, token_usage=_read_token_usage(payload))
+        finish_reason = payload.get("done_reason")
+        return GenerationResult(
+            text=text,
+            token_usage=_read_token_usage(payload),
+            finish_reason=finish_reason if isinstance(finish_reason, str) else None,
+        )
 
     def _request_json(self, request: Request) -> dict[str, Any]:
         try:

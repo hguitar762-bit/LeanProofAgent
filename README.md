@@ -194,6 +194,16 @@ lean-proof solve-text `
   --model $env:OLLAMA_MODEL
 ```
 
+To bound local output length without changing prompts or verification, pass
+`--num-predict <tokens>`. The same option is available on the real-model
+experiment runner, and its value is saved in `config.json`:
+
+```powershell
+python examples/run_real_model_experiment.py `
+  --backend ollama --model qwen3:8b --num-predict 2048 `
+  --name local_num_predict_2048 --ids arith_add_zero
+```
+
 An explicit `--model` takes precedence over `OLLAMA_MODEL`. Set `OLLAMA_HOST`
 to override the default `http://localhost:11434` endpoint. Before generation,
 the backend checks `/api/tags` and reports a clear error if the server cannot be

@@ -61,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
     )
+    solve.add_argument("--num-predict", type=int, help="Ollama-only output token limit")
     solve.add_argument("--max-attempts", type=int, default=3)
     solve.add_argument("--artifacts-dir", type=Path, default=Path("runs"))
     solve.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -79,6 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     solve_text.add_argument(
         "--model",
         help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
+    )
+    solve_text.add_argument(
+        "--num-predict", type=int, help="Ollama-only output token limit"
     )
     solve_text.add_argument("--max-formalization-attempts", type=int, default=3)
     solve_text.add_argument("--max-attempts", type=int, default=3)
@@ -107,6 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument(
         "--model",
         help="model name (ignored by mock; otherwise backend environment/default)",
+    )
+    evaluate.add_argument(
+        "--num-predict", type=int, help="Ollama-only output token limit"
     )
     evaluate.add_argument("--max-attempts", type=int, default=3)
     evaluate.add_argument("--output-dir", type=Path, default=Path("evaluations"))
@@ -137,6 +144,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
     )
     evaluate_formalization.add_argument(
+        "--num-predict", type=int, help="Ollama-only output token limit"
+    )
+    evaluate_formalization.add_argument(
         "--max-formalization-attempts", type=int, default=3
     )
     evaluate_formalization.add_argument("--max-attempts", type=int, default=3)
@@ -162,6 +172,9 @@ def build_parser() -> argparse.ArgumentParser:
     check_equivalence.add_argument(
         "--model",
         help="model name (default: OPENAI_MODEL/gpt-5.5 or OLLAMA_MODEL)",
+    )
+    check_equivalence.add_argument(
+        "--num-predict", type=int, help="Ollama-only output token limit"
     )
     check_equivalence.add_argument("--max-attempts", type=int, default=2)
     check_equivalence.add_argument(
@@ -228,7 +241,9 @@ def _solve(args: argparse.Namespace) -> int:
     else:
         problem = LeanProblem(args.name, args.theorem)
 
-    backend, _ = create_backend(args.backend, args.model)
+    backend, _ = create_backend(
+        args.backend, args.model, num_predict=args.num_predict
+    )
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
     agent = ProofAgent(
         backend,
@@ -263,7 +278,9 @@ def _solve_text(args: argparse.Namespace) -> int:
     else:
         problem = NaturalLanguageProblem(args.name or "autoformalized", args.text)
 
-    backend, _ = create_backend(args.backend, args.model)
+    backend, _ = create_backend(
+        args.backend, args.model, num_predict=args.num_predict
+    )
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
     result = AutoformalizationAgent(
         backend,
@@ -298,7 +315,9 @@ def _evaluate(args: argparse.Namespace) -> int:
         backend = OfflineMockBackend()
         model = None
     else:
-        backend, model = create_backend(args.backend, args.model)
+        backend, model = create_backend(
+            args.backend, args.model, num_predict=args.num_predict
+        )
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
     result = EvaluationRunner(
         backend,
@@ -319,7 +338,9 @@ def _check_equivalence(args: argparse.Namespace) -> int:
     generated = load_statement_file(args.generated)
     imports = merge_imports(reference.imports, generated.imports)
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
-    backend, _ = create_backend(args.backend, args.model)
+    backend, _ = create_backend(
+        args.backend, args.model, num_predict=args.num_predict
+    )
     result = SemanticEquivalenceChecker(
         backend,
         verifier,
@@ -334,7 +355,9 @@ def _evaluate_formalization(args: argparse.Namespace) -> int:
     problems = load_formalization_benchmarks(args.benchmark)
     reviews = load_semantic_reviews(args.reviews) if args.reviews else None
     verifier = LeanVerifier(args.project_root, timeout_seconds=args.timeout)
-    backend, model = create_backend(args.backend, args.model)
+    backend, model = create_backend(
+        args.backend, args.model, num_predict=args.num_predict
+    )
     result = FormalizationEvaluationRunner(
         backend,
         verifier,

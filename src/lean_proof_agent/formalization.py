@@ -75,6 +75,7 @@ class FormalizationAttempt:
     verification: VerificationResult
     generation_seconds: float = 0.0
     token_usage: TokenUsage | None = None
+    finish_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +175,7 @@ class AutoformalizationAgent:
                     exc, partial_result
                 ) from exc
             generation_seconds = time.monotonic() - started
-            raw_response, token_usage = _generated_text(generated)
+            raw_response, token_usage, finish_reason = _generated_text(generated)
             source_path = run_dir / f"formalization_{number:02d}.lean"
             candidate: LeanProblem | None = None
 
@@ -217,6 +218,7 @@ class AutoformalizationAgent:
                 verification=verification,
                 generation_seconds=generation_seconds,
                 token_usage=token_usage,
+                finish_reason=finish_reason,
             )
             attempts.append(attempt)
             _write_formalization_attempt(run_dir, attempt)
@@ -337,11 +339,11 @@ def _statement_validation_source(problem: LeanProblem) -> str:
 
 def _generated_text(
     generated: str | GenerationResult,
-) -> tuple[str, TokenUsage | None]:
+) -> tuple[str, TokenUsage | None, str | None]:
     if isinstance(generated, GenerationResult):
-        return generated.text, generated.token_usage
+        return generated.text, generated.token_usage, generated.finish_reason
     if isinstance(generated, str):
-        return generated, None
+        return generated, None, None
     raise TypeError("LLM backend must return str or GenerationResult")
 
 
@@ -380,6 +382,8 @@ def _write_formalization_attempt(
             "source_file": attempt.source_path.name,
             "generation_seconds": attempt.generation_seconds,
             "token_usage": asdict(attempt.token_usage) if attempt.token_usage else None,
+            "finish_reason": attempt.finish_reason,
+            "truncated_by_token_limit": attempt.finish_reason == "length",
             "lean_feedback": (
                 None
                 if attempt.verification.success

@@ -27,12 +27,15 @@ def create_backend(
     model: str | None,
     *,
     check_available: bool = True,
+    num_predict: int | None = None,
 ) -> tuple[LLMBackend, str]:
     resolved = resolve_model(backend, model)
     if backend == "openai":
+        if num_predict is not None:
+            raise ValueError("--num-predict is only supported by the Ollama backend")
         return OpenAIBackend(resolved), resolved
     if backend == "ollama":
-        local = OllamaBackend(resolved)
+        local = OllamaBackend(resolved, num_predict=num_predict)
         if check_available:
             local.check_available()
         return local, resolved

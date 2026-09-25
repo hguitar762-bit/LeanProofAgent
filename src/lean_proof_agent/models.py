@@ -112,6 +112,7 @@ class GenerationResult:
 
     text: str
     token_usage: TokenUsage | None = None
+    finish_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +125,7 @@ class AttemptRecord:
     verification: VerificationResult
     generation_seconds: float = 0.0
     token_usage: TokenUsage | None = None
+    finish_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

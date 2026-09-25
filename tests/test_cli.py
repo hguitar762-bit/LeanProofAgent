@@ -11,6 +11,10 @@ def test_solve_text_keeps_original_autoformalization_constructor(
 ) -> None:
     captured: dict[str, object] = {}
 
+    def fake_create_backend(backend, model, **kwargs):
+        captured["num_predict"] = kwargs.get("num_predict")
+        return object(), model or "fixture"
+
     class FakeAgent:
         def __init__(self, *args, **kwargs) -> None:
             captured.update(kwargs)
@@ -26,7 +30,9 @@ def test_solve_text_keeps_original_autoformalization_constructor(
             )
 
     monkeypatch.setattr(
-        cli, "create_backend", lambda backend, model: (object(), model or "fixture")
+        cli,
+        "create_backend",
+        fake_create_backend,
     )
     monkeypatch.setattr(cli, "LeanVerifier", lambda *args, **kwargs: object())
     monkeypatch.setattr(cli, "AutoformalizationAgent", FakeAgent)
@@ -40,11 +46,14 @@ def test_solve_text_keeps_original_autoformalization_constructor(
             "ollama",
             "--model",
             "fixture-local-model",
+            "--num-predict",
+            "2048",
             "--artifacts-dir",
             str(tmp_path),
         ]
     )
     assert exit_code == 0
+    assert captured["num_predict"] == 2048
     assert "max_equivalence_attempts" not in captured
 
 
@@ -62,7 +71,9 @@ def test_evaluate_formalization_forwards_equivalence_attempt_limit(
 
     monkeypatch.setattr(cli, "load_formalization_benchmarks", lambda path: (object(),))
     monkeypatch.setattr(
-        cli, "create_backend", lambda backend, model: (object(), model or "fixture")
+        cli,
+        "create_backend",
+        lambda backend, model, **kwargs: (object(), model or "fixture"),
     )
     monkeypatch.setattr(cli, "LeanVerifier", lambda *args, **kwargs: object())
     monkeypatch.setattr(cli, "FormalizationEvaluationRunner", FakeRunner)
