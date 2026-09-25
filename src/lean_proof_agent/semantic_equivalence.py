@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import uuid
 
-from .agent import ProofAgent, ProofVerifier
+from .agent import ProofAgent, ProofGenerationError, ProofVerifier
 from .llm import LLMBackend
 from .models import LeanProblem, RunResult
 
@@ -153,6 +153,14 @@ class SemanticEquivalenceChecker:
                 max_attempts=self.max_attempts,
                 artifacts_root=run_dir / direction,
             ).solve(problem)
+        except ProofGenerationError as exc:
+            return EquivalenceDirectionResult(
+                direction,
+                "failed",
+                theorem,
+                exc.partial_result,
+                f"{type(exc.cause).__name__}: {exc.cause}",
+            )
         except Exception as exc:
             return EquivalenceDirectionResult(
                 direction,

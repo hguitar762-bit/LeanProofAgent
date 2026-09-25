@@ -18,6 +18,15 @@ from .models import (
 from .prompts import SYSTEM_PROMPT, build_user_prompt
 
 
+class ProofGenerationError(RuntimeError):
+    """Backend failure carrying proof attempts completed before the failure."""
+
+    def __init__(self, cause: Exception, partial_result: RunResult) -> None:
+        super().__init__(str(cause))
+        self.cause = cause
+        self.partial_result = partial_result
+
+
 class ProofVerifier(Protocol):
     """Compiler interface consumed by the agent."""
 
@@ -58,10 +67,15 @@ class ProofAgent:
                 compiler_error=compiler_error,
             )
             generation_started = time.monotonic()
-            generated = self.backend.generate(
-                system_prompt=SYSTEM_PROMPT,
-                user_prompt=prompt,
-            )
+            try:
+                generated = self.backend.generate(
+                    system_prompt=SYSTEM_PROMPT,
+                    user_prompt=prompt,
+                )
+            except Exception as exc:
+                partial_result = RunResult(problem, False, tuple(records), run_dir)
+                write_summary(partial_result)
+                raise ProofGenerationError(exc, partial_result) from exc
             generation_seconds = time.monotonic() - generation_started
             if isinstance(generated, GenerationResult):
                 raw_response = generated.text

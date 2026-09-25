@@ -12,7 +12,11 @@ import time
 import uuid
 
 from .agent import ProofVerifier
-from .formalization import AutoformalizationAgent, StatementVerifier
+from .formalization import (
+    AutoformalizationAgent,
+    AutoformalizationGenerationError,
+    StatementVerifier,
+)
 from .formalization_benchmarks import FormalizationBenchmark
 from .llm import LLMBackend
 from .models import TokenUsage
@@ -191,6 +195,19 @@ class FormalizationEvaluationRunner:
                     artifacts_root=evaluation_dir / "problems",
                     imports=benchmark.imports,
                 ).solve(benchmark.natural_language_problem())
+            except AutoformalizationGenerationError as exc:
+                outcomes.append(
+                    _problem_outcome(
+                        benchmark,
+                        review,
+                        exc.partial_result,
+                        None,
+                        None,
+                        time.monotonic() - started,
+                        backend_error=f"{type(exc.cause).__name__}: {exc.cause}",
+                    )
+                )
+                continue
             except Exception as exc:  # isolate provider and per-problem failures
                 outcomes.append(
                     _exception_outcome(
@@ -384,7 +401,13 @@ def render_formalization_markdown(result: FormalizationEvaluationResult) -> str:
 
 
 def _problem_outcome(
-    benchmark, review, result, equivalence, equivalence_error, latency
+    benchmark,
+    review,
+    result,
+    equivalence,
+    equivalence_error,
+    latency,
+    backend_error=None,
 ):
     attempts = result.formalization_attempts
     first_formalization_well_formed = bool(
@@ -401,6 +424,8 @@ def _problem_outcome(
     proof_repair_attempted = len(proof_records) > 1
     proof_repair_succeeded = proof_repair_attempted and proof_verified
     categories = list(review.failure_categories)
+    if backend_error:
+        categories.append("backend failure")
     if equivalence_error:
         categories.append("equivalence checker failure")
     failure_reason = None
@@ -415,7 +440,7 @@ def _problem_outcome(
             )
             failure_reason = attempts[-1].verification.compiler_feedback
             formalization_feedback = failure_reason
-        else:
+        elif not backend_error:
             categories.append("statement generation failure")
     elif not proof_verified:
         categories.append("proof verification failure")
@@ -424,6 +449,8 @@ def _problem_outcome(
             proof_feedback = failure_reason
     if equivalence and equivalence.result == "unknown":
         categories.append("semantic equivalence unknown")
+    if backend_error:
+        failure_reason = backend_error
     usage_records = [item.token_usage for item in attempts]
     usage_records.extend(item.token_usage for item in proof_records)
     if equivalence:

@@ -9,7 +9,7 @@ import re
 import time
 from typing import Protocol
 
-from .agent import ProofAgent, ProofVerifier
+from .agent import ProofAgent, ProofGenerationError, ProofVerifier
 from .artifacts import create_run_dir
 from .llm import LLMBackend
 from .models import (
@@ -100,6 +100,17 @@ class AutoformalizationResult:
         return self.proof_result.final_proof if self.proof_result else None
 
 
+class AutoformalizationGenerationError(RuntimeError):
+    """Backend failure carrying all autoformalization work completed so far."""
+
+    def __init__(
+        self, cause: Exception, partial_result: AutoformalizationResult
+    ) -> None:
+        super().__init__(str(cause))
+        self.cause = cause
+        self.partial_result = partial_result
+
+
 class AutoformalizationAgent:
     """Generate a theorem statement, elaborate it, then invoke ``ProofAgent``."""
 
@@ -149,10 +160,19 @@ class AutoformalizationAgent:
                 lean_error=lean_error,
             )
             started = time.monotonic()
-            generated = self.backend.generate(
-                system_prompt=FORMALIZATION_SYSTEM_PROMPT,
-                user_prompt=prompt,
-            )
+            try:
+                generated = self.backend.generate(
+                    system_prompt=FORMALIZATION_SYSTEM_PROMPT,
+                    user_prompt=prompt,
+                )
+            except Exception as exc:
+                partial_result = AutoformalizationResult(
+                    problem, tuple(attempts), None, None, run_dir
+                )
+                _write_autoformalization_summary(partial_result)
+                raise AutoformalizationGenerationError(
+                    exc, partial_result
+                ) from exc
             generation_seconds = time.monotonic() - started
             raw_response, token_usage = _generated_text(generated)
             source_path = run_dir / f"formalization_{number:02d}.lean"
@@ -215,12 +235,25 @@ class AutoformalizationAgent:
             _write_autoformalization_summary(result)
             return result
 
-        proof_result = ProofAgent(
-            self.backend,
-            self.proof_verifier,
-            max_attempts=self.max_proof_attempts,
-            artifacts_root=run_dir / "proof",
-        ).solve(final_problem)
+        try:
+            proof_result = ProofAgent(
+                self.backend,
+                self.proof_verifier,
+                max_attempts=self.max_proof_attempts,
+                artifacts_root=run_dir / "proof",
+            ).solve(final_problem)
+        except ProofGenerationError as exc:
+            partial_result = AutoformalizationResult(
+                problem,
+                tuple(attempts),
+                final_problem,
+                exc.partial_result,
+                run_dir,
+            )
+            _write_autoformalization_summary(partial_result)
+            raise AutoformalizationGenerationError(
+                exc.cause, partial_result
+            ) from exc
         result = AutoformalizationResult(
             problem, tuple(attempts), final_problem, proof_result, run_dir
         )

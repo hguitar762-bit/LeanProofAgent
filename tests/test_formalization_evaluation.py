@@ -39,6 +39,16 @@ class UsageSequenceBackend(SequenceBackend):
         )
 
 
+class TimeoutAfterResponsesBackend(UsageSequenceBackend):
+    def generate(self, *, system_prompt: str, user_prompt: str) -> GenerationResult:
+        try:
+            return super().generate(
+                system_prompt=system_prompt, user_prompt=user_prompt
+            )
+        except StopIteration:
+            raise TimeoutError("fixture provider timeout") from None
+
+
 class FixtureVerifier:
     def verify(self, source_path: Path) -> VerificationResult:
         source = source_path.read_text(encoding="utf-8")
@@ -177,6 +187,39 @@ def test_evaluation_measures_proof_repair_gain(tmp_path: Path) -> None:
     assert result.end_to_end_proof_verification_rate == 1
     assert result.proof_repair_gain_count == 1
     assert result.proof_repair_gain_percentage_points == 100
+
+
+def test_backend_failure_preserves_completed_attempt_metrics(tmp_path: Path) -> None:
+    benchmark = load_formalization_benchmarks(BENCHMARK_DIR)[0]
+    backend = TimeoutAfterResponsesBackend(
+        [benchmark.reference_statement, "by\n  exact missing_symbol"]
+    )
+    verifier = FixtureVerifier()
+    result = FormalizationEvaluationRunner(
+        backend,
+        verifier,
+        verifier,
+        max_formalization_attempts=1,
+        max_proof_attempts=2,
+        max_equivalence_attempts=1,
+        output_root=tmp_path,
+    ).run((benchmark,))
+
+    item = result.problems[0]
+    assert item.first_formalization_well_formed is True
+    assert item.well_formed is True
+    assert item.generated_statement == benchmark.reference_statement
+    assert item.formalization_attempts == 1
+    assert item.proof_attempts == 1
+    assert item.token_usage == TokenUsage(2, 4, 6)
+    assert item.token_usage_reported_attempts == 2
+    assert item.run_dir is not None
+    assert "backend failure" in item.failure_categories
+    assert "proof verification failure" in item.failure_categories
+    assert item.failure_reason == "TimeoutError: fixture provider timeout"
+    assert result.average_formalization_attempts == 1
+    assert result.average_proof_attempts == 1
+    assert result.token_usage == TokenUsage(2, 4, 6)
 
 
 def test_nonmatching_statements_are_unknown_not_inequivalent() -> None:
