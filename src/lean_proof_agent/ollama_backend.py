@@ -80,12 +80,17 @@ class OllamaBackend:
         )
         payload = self._request_json(request)
         text = payload.get("response")
-        if not isinstance(text, str) or not text.strip():
-            raise RuntimeError("Ollama response did not contain generated text")
         finish_reason = payload.get("done_reason")
+        token_usage = _read_token_usage(payload)
+        if not isinstance(text, str) or not text.strip():
+            detail = (
+                f" (done_reason={finish_reason}, "
+                f"eval_count={token_usage.output_tokens if token_usage else 'unavailable'})"
+            )
+            raise RuntimeError(f"Ollama response did not contain generated text{detail}")
         return GenerationResult(
             text=text,
-            token_usage=_read_token_usage(payload),
+            token_usage=token_usage,
             finish_reason=finish_reason if isinstance(finish_reason, str) else None,
         )
 

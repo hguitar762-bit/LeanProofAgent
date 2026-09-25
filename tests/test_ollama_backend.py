@@ -92,6 +92,28 @@ def test_ollama_num_predict_must_be_positive() -> None:
         OllamaBackend("qwen-test", num_predict=0)
 
 
+def test_ollama_empty_length_response_reports_truncation_metadata() -> None:
+    backend = OllamaBackend(
+        "qwen-test",
+        num_predict=2048,
+        opener=RecordingOpener(
+            [
+                {
+                    "response": "",
+                    "prompt_eval_count": 10,
+                    "eval_count": 2048,
+                    "done_reason": "length",
+                }
+            ]
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError, match=r"done_reason=length, eval_count=2048"
+    ):
+        backend.generate(system_prompt="system", user_prompt="user")
+
+
 def test_ollama_usage_stays_unavailable_when_counts_are_missing() -> None:
     backend = OllamaBackend(
         "local", opener=RecordingOpener([{"response": "by\n  simp"}])
