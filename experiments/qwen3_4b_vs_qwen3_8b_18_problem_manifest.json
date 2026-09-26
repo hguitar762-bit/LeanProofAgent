@@ -1,0 +1,43 @@
+{
+  "name": "qwen3_4b_vs_qwen3_8b_18_problem_benchmark",
+  "frozen_before_run": true,
+  "frozen_date": "2026-09-27",
+  "git_commit": "96a0a53e1ef4e40de9f245130d976abe2038f5e8",
+  "benchmark_path": "benchmarks/formalization",
+  "benchmark_directory_sha256": "7ac68ea1e8fbad111763bf1b0b508253d91aa7a50bfccbc2879157ed7dc7f3d7",
+  "curated_v05_file_sha256": "ec0baf9b54a8a06e1c4ae5b3e88821833500ba1bc44b380ed9438e2d0efe408c",
+  "models": [
+    "qwen3:4b",
+    "qwen3:8b"
+  ],
+  "generation_config": {
+    "num_predict": null,
+    "temperature": null,
+    "context_length": null,
+    "note": "Use the Ollama model defaults; do not send explicit overrides."
+  },
+  "max_formalization_attempts": 3,
+  "max_proof_attempts": 3,
+  "max_equivalence_attempts_per_direction": 2,
+  "lean_timeout_seconds": 120.0,
+  "problems": [
+    {"id": "arith_add_zero", "category": "arithmetic", "difficulty": "easy"},
+    {"id": "arith_nat_add_assoc", "category": "arithmetic", "difficulty": "medium"},
+    {"id": "arith_even_double", "category": "arithmetic", "difficulty": "hard"},
+    {"id": "algebra_real_mul_comm", "category": "algebra", "difficulty": "easy"},
+    {"id": "algebra_square_sum", "category": "algebra", "difficulty": "medium"},
+    {"id": "algebra_mul_inv_cancel", "category": "algebra", "difficulty": "hard"},
+    {"id": "logic_and_comm", "category": "logic", "difficulty": "easy"},
+    {"id": "logic_implication_trans", "category": "logic", "difficulty": "medium"},
+    {"id": "logic_contraposition", "category": "logic", "difficulty": "hard"},
+    {"id": "ineq_nat_le_add", "category": "inequalities", "difficulty": "easy"},
+    {"id": "ineq_lt_of_lt_of_le", "category": "inequalities", "difficulty": "medium"},
+    {"id": "ineq_square_nonnegative", "category": "inequalities", "difficulty": "hard"},
+    {"id": "sets_union_comm", "category": "sets", "difficulty": "easy"},
+    {"id": "sets_diff_membership", "category": "sets", "difficulty": "medium"},
+    {"id": "sets_preimage_inter", "category": "sets", "difficulty": "hard"},
+    {"id": "func_id_apply", "category": "functions", "difficulty": "easy"},
+    {"id": "func_injective_comp", "category": "functions", "difficulty": "medium"},
+    {"id": "func_left_inverse_injective", "category": "functions", "difficulty": "hard"}
+  ]
+}
