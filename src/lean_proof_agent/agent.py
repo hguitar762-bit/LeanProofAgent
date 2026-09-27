@@ -16,6 +16,7 @@ from .models import (
     VerificationResult,
 )
 from .prompts import SYSTEM_PROMPT, build_user_prompt
+from .premise_retrieval import PremiseRetriever, write_premises
 
 
 class ProofGenerationError(RuntimeError):
@@ -44,6 +45,8 @@ class ProofAgent:
         *,
         max_attempts: int = 3,
         artifacts_root: Path = Path("runs"),
+        premise_retriever: PremiseRetriever | None = None,
+        premise_top_k: int = 10,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
@@ -51,10 +54,20 @@ class ProofAgent:
         self.verifier = verifier
         self.max_attempts = max_attempts
         self.artifacts_root = artifacts_root
+        if premise_top_k < 1:
+            raise ValueError("premise_top_k must be at least 1")
+        self.premise_retriever = premise_retriever
+        self.premise_top_k = premise_top_k
 
     def solve(self, problem: LeanProblem) -> RunResult:
         run_dir = create_run_dir(self.artifacts_root, problem.name)
         write_problem(run_dir, problem, self.max_attempts)
+        premises = ()
+        if self.premise_retriever is not None:
+            premises = self.premise_retriever.retrieve(
+                problem, top_k=self.premise_top_k
+            )
+            write_premises(run_dir / "premises.json", premises)
         records: list[AttemptRecord] = []
         previous_proof: str | None = None
         compiler_error: str | None = None
@@ -65,6 +78,7 @@ class ProofAgent:
                 attempt_number=number,
                 previous_proof=previous_proof,
                 compiler_error=compiler_error,
+                premises=premises,
             )
             generation_started = time.monotonic()
             try:

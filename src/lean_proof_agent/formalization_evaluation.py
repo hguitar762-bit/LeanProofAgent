@@ -20,6 +20,7 @@ from .formalization import (
 from .formalization_benchmarks import FormalizationBenchmark
 from .llm import LLMBackend
 from .models import TokenUsage
+from .premise_retrieval import PremiseRetriever
 from .semantic_equivalence import SemanticEquivalenceChecker
 
 
@@ -158,6 +159,8 @@ class FormalizationEvaluationRunner:
         backend_name: str = "custom",
         model: str | None = None,
         reviews: dict[str, SemanticReview] | None = None,
+        premise_retriever: PremiseRetriever | None = None,
+        premise_top_k: int = 10,
     ) -> None:
         if min(
             max_formalization_attempts, max_proof_attempts, max_equivalence_attempts
@@ -173,6 +176,8 @@ class FormalizationEvaluationRunner:
         self.backend_name = backend_name
         self.model = model
         self.reviews = reviews or {}
+        self.premise_retriever = premise_retriever
+        self.premise_top_k = premise_top_k
 
     def run(
         self, problems: tuple[FormalizationBenchmark, ...]
@@ -194,6 +199,8 @@ class FormalizationEvaluationRunner:
                     max_proof_attempts=self.max_proof_attempts,
                     artifacts_root=evaluation_dir / "problems",
                     imports=benchmark.imports,
+                    premise_retriever=self.premise_retriever,
+                    premise_top_k=self.premise_top_k,
                 ).solve(benchmark.natural_language_problem())
             except AutoformalizationGenerationError as exc:
                 outcomes.append(

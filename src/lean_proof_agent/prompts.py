@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .models import LeanProblem
+from .premise_retrieval import Premise
 
 
 SYSTEM_PROMPT = """You write Lean 4 proofs checked against Mathlib.
@@ -17,6 +18,7 @@ def build_user_prompt(
     attempt_number: int,
     previous_proof: str | None = None,
     compiler_error: str | None = None,
+    premises: tuple[Premise, ...] = (),
     max_feedback_chars: int = 12_000,
 ) -> str:
     """Build a prompt that makes compiler feedback the repair signal."""
@@ -26,6 +28,18 @@ def build_user_prompt(
         f"Attempt {attempt_number}. Complete this Lean file:\n\n"
         f"{imports}\n\n{problem.theorem.strip()} := <YOUR_PROOF>"
     )
+    if premises:
+        rendered = "\n".join(
+            f"- {item.name} : {item.signature}  [module: {item.module}]"
+            for item in premises
+        )
+        base = (
+            f"{base}\n\n"
+            "Potentially relevant declarations retrieved from the exact local "
+            "Lean environment follow. They are optional; use only declarations "
+            "whose types fit the goal. Do not invent variants of these names.\n"
+            f"{rendered}"
+        )
     if previous_proof is None or compiler_error is None:
         return base
     feedback = compiler_error[-max_feedback_chars:]

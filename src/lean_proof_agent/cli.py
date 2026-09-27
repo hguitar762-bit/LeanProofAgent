@@ -25,6 +25,7 @@ from .formalization_evaluation import (
 )
 from .models import LeanProblem
 from .offline_backend import OfflineMockBackend
+from .premise_retrieval import MathlibRetriever
 from .semantic_equivalence import (
     SemanticEquivalenceChecker,
     load_statement_file,
@@ -66,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     solve.add_argument("--artifacts-dir", type=Path, default=Path("runs"))
     solve.add_argument("--project-root", type=Path, default=Path.cwd())
     solve.add_argument("--timeout", type=float, default=120.0)
+    _add_premise_arguments(solve)
     solve.set_defaults(handler=_solve)
 
     solve_text = subcommands.add_parser(
@@ -91,6 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     solve_text.add_argument("--project-root", type=Path, default=Path.cwd())
     solve_text.add_argument("--timeout", type=float, default=120.0)
+    _add_premise_arguments(solve_text)
     solve_text.set_defaults(handler=_solve_text)
 
     evaluate = subcommands.add_parser(
@@ -119,6 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--output-dir", type=Path, default=Path("evaluations"))
     evaluate.add_argument("--project-root", type=Path, default=Path.cwd())
     evaluate.add_argument("--timeout", type=float, default=120.0)
+    _add_premise_arguments(evaluate)
     evaluate.set_defaults(handler=_evaluate)
 
     evaluate_formalization = subcommands.add_parser(
@@ -158,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_formalization.add_argument("--project-root", type=Path, default=Path.cwd())
     evaluate_formalization.add_argument("--timeout", type=float, default=120.0)
+    _add_premise_arguments(evaluate_formalization)
     evaluate_formalization.set_defaults(handler=_evaluate_formalization)
 
     check_equivalence = subcommands.add_parser(
@@ -197,6 +202,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare.set_defaults(handler=_compare)
     return parser
+
+
+def _add_premise_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--premise-retrieval",
+        action="store_true",
+        help="retrieve deterministic lexical premises from local Mathlib",
+    )
+    parser.add_argument(
+        "--premise-top-k",
+        type=int,
+        default=10,
+        metavar="N",
+        help="maximum retrieved premises (default: 10)",
+    )
+
+
+def _make_retriever(args: argparse.Namespace):
+    if args.premise_top_k < 1:
+        raise ValueError("--premise-top-k must be at least 1")
+    if not args.premise_retrieval:
+        return None
+    return MathlibRetriever(
+        args.project_root,
+        timeout_seconds=max(args.timeout, 120.0),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -250,6 +281,8 @@ def _solve(args: argparse.Namespace) -> int:
         verifier,
         max_attempts=args.max_attempts,
         artifacts_root=args.artifacts_dir,
+        premise_retriever=_make_retriever(args),
+        premise_top_k=args.premise_top_k,
     )
     result = agent.solve(problem)
     status = "SUCCESS" if result.success else "FAILED"
@@ -289,6 +322,8 @@ def _solve_text(args: argparse.Namespace) -> int:
         max_formalization_attempts=args.max_formalization_attempts,
         max_proof_attempts=args.max_attempts,
         artifacts_root=args.artifacts_dir,
+        premise_retriever=_make_retriever(args),
+        premise_top_k=args.premise_top_k,
     ).solve(problem)
     if result.final_theorem:
         print("Formalized theorem:")
@@ -326,6 +361,8 @@ def _evaluate(args: argparse.Namespace) -> int:
         output_root=args.output_dir,
         backend_name=args.backend,
         model=model,
+        premise_retriever=_make_retriever(args),
+        premise_top_k=args.premise_top_k,
     ).run(problems)
     print(render_markdown(result), end="")
     print(f"JSON: {result.evaluation_dir / 'evaluation.json'}")
@@ -369,6 +406,8 @@ def _evaluate_formalization(args: argparse.Namespace) -> int:
         backend_name=args.backend,
         model=model,
         reviews=reviews,
+        premise_retriever=_make_retriever(args),
+        premise_top_k=args.premise_top_k,
     ).run(problems)
     print(render_formalization_markdown(result), end="")
     print(f"JSON: {result.evaluation_dir / 'evaluation.json'}")

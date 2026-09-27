@@ -15,6 +15,7 @@ from lean_proof_agent.backends import create_backend
 from lean_proof_agent.experiment_reporting import write_experiment_bundle
 from lean_proof_agent.formalization_benchmarks import load_formalization_benchmarks
 from lean_proof_agent.formalization_evaluation import FormalizationEvaluationRunner
+from lean_proof_agent.premise_retrieval import MathlibRetriever
 from lean_proof_agent.verifier import LeanVerifier
 
 
@@ -41,12 +42,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-proof-attempts", type=int, default=3)
     parser.add_argument("--max-equivalence-attempts", type=int, default=2)
     parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument("--premise-retrieval", action="store_true")
+    parser.add_argument("--premise-top-k", type=int, default=10, metavar="N")
     parser.add_argument("--experiments-root", type=Path, default=ROOT / "experiments")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.premise_top_k < 1:
+        raise SystemExit("--premise-top-k must be at least 1")
     if args.backend == "openai" and not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit(
             "OPENAI_API_KEY is not set. Set it in the current process environment; "
@@ -97,11 +102,24 @@ def main(argv: list[str] | None = None) -> int:
         "benchmark_sha256": _benchmark_hash(args.benchmark),
         "problem_ids": [problem.id for problem in problems],
         "problem_count": len(problems),
+        "premise_retrieval": args.premise_retrieval,
+        "premise_top_k": args.premise_top_k if args.premise_retrieval else None,
+        "premise_retrieval_method": (
+            "deterministic lexical search over proposition-valued declarations "
+            "in the imported local Lean environment"
+            if args.premise_retrieval
+            else None
+        ),
     }
     (experiment_dir / "config.json").write_text(
         json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     verifier = LeanVerifier(ROOT, timeout_seconds=args.timeout)
+    premise_retriever = (
+        MathlibRetriever(ROOT, timeout_seconds=max(args.timeout, 120.0))
+        if args.premise_retrieval
+        else None
+    )
     result = FormalizationEvaluationRunner(
         backend,
         verifier,
@@ -112,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         output_root=experiment_dir / "artifacts",
         backend_name=args.backend,
         model=model,
+        premise_retriever=premise_retriever,
+        premise_top_k=args.premise_top_k,
     ).run(problems)
     provider_failures = sum(
         "backend failure" in problem.failure_categories for problem in result.problems

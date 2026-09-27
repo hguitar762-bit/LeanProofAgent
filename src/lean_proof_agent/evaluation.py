@@ -14,6 +14,7 @@ import uuid
 from .agent import ProofAgent, ProofVerifier
 from .llm import LLMBackend
 from .models import LeanProblem, RunResult, TokenUsage
+from .premise_retrieval import PremiseRetriever
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +65,8 @@ class EvaluationRunner:
         output_root: Path = Path("evaluations"),
         backend_name: str = "custom",
         model: str | None = None,
+        premise_retriever: PremiseRetriever | None = None,
+        premise_top_k: int = 10,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
@@ -73,6 +76,8 @@ class EvaluationRunner:
         self.output_root = output_root
         self.backend_name = backend_name
         self.model = model
+        self.premise_retriever = premise_retriever
+        self.premise_top_k = premise_top_k
 
     def run(self, problems: tuple[LeanProblem, ...]) -> EvaluationResult:
         if not problems:
@@ -90,6 +95,8 @@ class EvaluationRunner:
                     self.verifier,
                     max_attempts=self.max_attempts,
                     artifacts_root=problem_artifacts,
+                    premise_retriever=self.premise_retriever,
+                    premise_top_k=self.premise_top_k,
                 ).solve(problem)
             except Exception as exc:  # isolate one theorem/backend failure
                 latency = time.monotonic() - started

@@ -20,6 +20,7 @@ from .models import (
     VerificationResult,
     reject_unsafe_lean,
 )
+from .premise_retrieval import PremiseRetriever
 
 
 FORMALIZATION_SYSTEM_PROMPT = """You translate natural-language mathematics into Lean 4 theorem statements using Mathlib.
@@ -125,6 +126,8 @@ class AutoformalizationAgent:
         max_proof_attempts: int = 3,
         artifacts_root: Path = Path("autoformalizations"),
         imports: tuple[str, ...] = ("Mathlib",),
+        premise_retriever: PremiseRetriever | None = None,
+        premise_top_k: int = 10,
     ) -> None:
         if max_formalization_attempts < 1:
             raise ValueError("max_formalization_attempts must be at least 1")
@@ -137,6 +140,8 @@ class AutoformalizationAgent:
         self.max_proof_attempts = max_proof_attempts
         self.artifacts_root = artifacts_root
         self.imports = imports
+        self.premise_retriever = premise_retriever
+        self.premise_top_k = premise_top_k
 
     def solve(self, problem: NaturalLanguageProblem) -> AutoformalizationResult:
         run_dir = create_run_dir(self.artifacts_root, problem.name)
@@ -243,6 +248,8 @@ class AutoformalizationAgent:
                 self.proof_verifier,
                 max_attempts=self.max_proof_attempts,
                 artifacts_root=run_dir / "proof",
+                premise_retriever=self.premise_retriever,
+                premise_top_k=self.premise_top_k,
             ).solve(final_problem)
         except ProofGenerationError as exc:
             partial_result = AutoformalizationResult(
