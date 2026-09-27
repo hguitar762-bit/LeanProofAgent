@@ -110,13 +110,16 @@ def main(argv: list[str] | None = None) -> int:
             if args.premise_retrieval
             else None
         ),
+        "premise_retrieval_timeout_seconds": (
+            max(args.timeout, 180.0) if args.premise_retrieval else None
+        ),
     }
     (experiment_dir / "config.json").write_text(
         json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     verifier = LeanVerifier(ROOT, timeout_seconds=args.timeout)
     premise_retriever = (
-        MathlibRetriever(ROOT, timeout_seconds=max(args.timeout, 120.0))
+        MathlibRetriever(ROOT, timeout_seconds=max(args.timeout, 180.0))
         if args.premise_retrieval
         else None
     )

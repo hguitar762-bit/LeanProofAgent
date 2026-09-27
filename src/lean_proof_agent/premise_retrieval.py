@@ -274,18 +274,42 @@ def _lean_query_source(imports: tuple[str, ...], tokens: tuple[str, ...]) -> str
 
 open Lean Meta
 
+def premiseLexicalScore (tokens : Array String) (name : Name) : Nat :=
+  let lowered := name.toString.toLower
+  tokens.foldl (fun score token =>
+    if lowered.contains token then score + token.length else score) 0
+
 run_cmd Lean.Elab.Command.liftTermElabM do
   let queryTokens : Array String := #[{lean_tokens}]
   let env ← getEnv
-  for (name, info) in env.constants.map₁ do
+  let mut names : Array Name := #[]
+  for (name, _) in env.constants.map₁ do
     let nameText := name.toString
     let lowered := nameText.toLower
     if !nameText.startsWith "_private" && !nameText.contains "._proof_" && queryTokens.any (fun token => lowered.contains token) then
-      if ← isProp info.type then
-        let rendered ← ppExpr info.type
-        let signature := (rendered.pretty.replace "\\n" " ").replace "\\t" " "
-        let moduleName := (env.getModuleFor? name).map (·.toString) |>.getD "unknown"
-        logInfo m!"{_MARKER}\\t{{nameText}}\\t{{moduleName}}\\t{{signature}}"
+      names := names.push name
+  let ranked := names.qsort fun left right =>
+    let leftScore := premiseLexicalScore queryTokens left
+    let rightScore := premiseLexicalScore queryTokens right
+    if leftScore == rightScore then
+      if left.toString.length == right.toString.length then
+        left.toString < right.toString
+      else
+        left.toString.length < right.toString.length
+    else
+      leftScore > rightScore
+  let mut emitted := 0
+  for name in ranked.take 128 do
+    if emitted < 24 then
+      try
+        if let some info := env.find? name then
+          if ← isProp info.type then
+            let rendered ← ppExpr info.type
+            let signature := (rendered.pretty.replace "\\n" " ").replace "\\t" " "
+            let moduleName := (env.getModuleFor? name).map (·.toString) |>.getD "unknown"
+            logInfo m!"{_MARKER}\\t{{name.toString}}\\t{{moduleName}}\\t{{signature}}"
+            emitted := emitted + 1
+      catch _ => pure ()
 '''
 
 

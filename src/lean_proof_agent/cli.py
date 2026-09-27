@@ -226,7 +226,7 @@ def _make_retriever(args: argparse.Namespace):
         return None
     return MathlibRetriever(
         args.project_root,
-        timeout_seconds=max(args.timeout, 120.0),
+        timeout_seconds=max(args.timeout, 180.0),
     )
 
 
