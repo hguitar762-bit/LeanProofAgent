@@ -8,6 +8,7 @@ import pytest
 from lean_proof_agent.agent import ProofAgent
 from lean_proof_agent.models import LeanProblem, VerificationResult
 from lean_proof_agent.premise_retrieval import MathlibRetriever
+from lean_proof_agent.premise_retrieval import _query_tokens, _search_tokens
 from lean_proof_agent.verifier import LeanVerifier
 
 
@@ -66,6 +67,14 @@ def test_retriever_contains_no_benchmark_specific_answers() -> None:
         "func_left_inverse_injective",
     }
     assert not any(problem_id in source for problem_id in forbidden)
+
+
+def test_search_uses_distinctive_name_compounds_not_high_frequency_types() -> None:
+    theorem = "theorem any_name_add_zero (n : Nat) : n + 0 = n"
+    search = _search_tokens(theorem, _query_tokens(theorem))
+
+    assert "add_zero" in search
+    assert "nat" not in search
 
 
 def test_retrieval_mode_adds_prompt_context_and_persists_candidates(

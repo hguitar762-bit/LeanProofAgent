@@ -54,6 +54,28 @@ _SYMBOL_WORDS = {
     "⁻¹": ("inv", "inverse"),
     "∘": ("comp", "compose"),
 }
+_SEARCH_GENERIC = frozenset(
+    {
+        "algebra",
+        "arith",
+        "func",
+        "function",
+        "ineq",
+        "int",
+        "integer",
+        "logic",
+        "nat",
+        "natural",
+        "real",
+        "set",
+        "sets",
+    }
+)
+_WORD_ALIASES = {
+    "membership": "mem",
+    "nonnegative": "nonneg",
+    "implication": "imp",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,23 +111,32 @@ class MathlibRetriever:
         self.project_root = project_root.resolve()
         self.lake_executable = str(lake_executable or _find_lake())
         self.timeout_seconds = timeout_seconds
-        self._cache: dict[tuple[tuple[str, ...], tuple[str, ...]], tuple[Premise, ...]] = {}
+        self._cache: dict[
+            tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]],
+            tuple[Premise, ...],
+        ] = {}
 
     def retrieve(self, problem: LeanProblem, *, top_k: int) -> tuple[Premise, ...]:
         if top_k < 1:
             raise ValueError("premise_top_k must be at least 1")
         tokens = _query_tokens(problem.theorem)
-        key = (problem.imports, tokens)
+        search_tokens = _search_tokens(problem.theorem, tokens)
+        key = (problem.imports, search_tokens, tokens)
         candidates = self._cache.get(key)
         if candidates is None:
-            candidates = self._query_environment(problem.imports, tokens)
+            candidates = self._query_environment(
+                problem.imports, tokens, search_tokens
+            )
             self._cache[key] = candidates
         return candidates[:top_k]
 
     def _query_environment(
-        self, imports: tuple[str, ...], tokens: tuple[str, ...]
+        self,
+        imports: tuple[str, ...],
+        tokens: tuple[str, ...],
+        search_tokens: tuple[str, ...],
     ) -> tuple[Premise, ...]:
-        source = _lean_query_source(imports, tokens)
+        source = _lean_query_source(imports, search_tokens)
         with tempfile.TemporaryDirectory(prefix="lean-premises-") as directory:
             path = Path(directory) / "Query.lean"
             path.write_text(source, encoding="utf-8")
@@ -154,9 +185,7 @@ def write_premises(path: Path, premises: tuple[Premise, ...]) -> None:
 
 
 def _query_tokens(theorem: str) -> tuple[str, ...]:
-    declaration = re.sub(
-        r"^\s*(?:theorem|example)\s+[A-Za-z_][A-Za-z0-9_']*", "", theorem, count=1
-    )
+    declaration = re.sub(r"^\s*(?:theorem|example)\s+", "", theorem, count=1)
     words: set[str] = set()
     words.update(item.lower().replace("'", "") for item in _QUALIFIED_RE.findall(declaration))
     for identifier in _WORD_RE.findall(declaration):
@@ -169,6 +198,47 @@ def _query_tokens(theorem: str) -> tuple[str, ...]:
         if symbol in declaration:
             words.update(aliases)
     return tuple(sorted(words))
+
+
+def _search_tokens(theorem: str, scoring_tokens: tuple[str, ...]) -> tuple[str, ...]:
+    match = re.match(
+        r"^\s*(?:theorem|example)\s+([A-Za-z_][A-Za-z0-9_']*)", theorem
+    )
+    name_parts = [] if match is None else match.group(1).lower().split("_")
+    compounds = {
+        f"{left}_{right}"
+        for left, right in zip(name_parts, name_parts[1:])
+        if left not in _SEARCH_GENERIC or right not in _SEARCH_GENERIC
+    }
+    for index, word in enumerate(name_parts):
+        alias = _WORD_ALIASES.get(word)
+        if alias:
+            compounds.add(alias)
+            if index > 0:
+                compounds.add(f"{name_parts[index - 1]}_{alias}")
+                compounds.add(f"{alias}_{name_parts[index - 1]}")
+            if index + 1 < len(name_parts):
+                compounds.add(f"{alias}_{name_parts[index + 1]}")
+                compounds.add(f"{name_parts[index + 1]}_{alias}")
+    qualified = {token for token in scoring_tokens if "." in token}
+    distinctive_candidates = {
+        _WORD_ALIASES.get(token, token)
+        for token in scoring_tokens
+        if token not in _SEARCH_GENERIC and len(token) >= 5
+    }
+    distinctive = (
+        {max(distinctive_candidates, key=lambda item: (len(item), item))}
+        if distinctive_candidates
+        else set()
+    )
+    selected = compounds | qualified | distinctive
+    if not selected:
+        selected = {
+            token
+            for token in scoring_tokens
+            if token not in _SEARCH_GENERIC and len(token) >= 3
+        }
+    return tuple(sorted(selected))
 
 
 def _score(name: str, signature: str, tokens: tuple[str, ...]) -> float:
