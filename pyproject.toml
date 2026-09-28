@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lean-proof-agent"
-version = "0.6.0"
-description = "Lean-verified proof repair and conservative semantic equivalence checking"
+version = "1.0.0"
+description = "Lean-verified mathematical reasoning with compiler-guided repair and lightweight Mathlib premise retrieval"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "LeanProofAgent contributors" }]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",

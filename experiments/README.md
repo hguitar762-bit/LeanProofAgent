@@ -10,6 +10,8 @@ Each OpenAI or local Ollama real-model run uses a unique directory such as
 - `failures.md`: categorized representative failures with Lean feedback.
 - `artifacts/`: raw statement, proof, equivalence, and compiler attempts.
 
-Raw `artifacts/` trees are ignored by Git. Review the four compact top-level
-files for secrets and size before committing a completed experiment. The runner
-never reads `.env` files and never writes `OPENAI_API_KEY` or other credentials.
+Generated experiment directories, including their raw `artifacts/` trees, are
+ignored by Git. Preserve them locally for audit, then promote only reviewed,
+secret-free aggregate reports or frozen manifests directly into `experiments/`
+for version control. The runner never reads `.env` files and never writes
+`OPENAI_API_KEY` or other credentials.

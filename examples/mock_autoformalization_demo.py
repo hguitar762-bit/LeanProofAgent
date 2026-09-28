@@ -30,6 +30,16 @@ class RepairingAutoformalizationMock:
             ):
                 raise RuntimeError("formalization repair prompt lacks Lean feedback")
             return "theorem offline_auto_demo (n : ℕ) : n + 0 = n"
+        if self.calls == 3:
+            if "<YOUR_PROOF>" not in user_prompt:
+                raise RuntimeError("valid theorem was not passed to ProofAgent")
+            return "by\n  exact 0"
+        if (
+            "Lean feedback:" not in user_prompt
+            or "Previous proof:" not in user_prompt
+            or "error:" not in user_prompt
+        ):
+            raise RuntimeError("proof repair prompt lacks Lean feedback")
         if "<YOUR_PROOF>" not in user_prompt:
             raise RuntimeError("valid theorem was not passed to ProofAgent")
         return "by\n  omega"
@@ -53,7 +63,7 @@ def main() -> None:
             verifier,
             verifier,
             max_formalization_attempts=2,
-            max_proof_attempts=1,
+            max_proof_attempts=2,
             artifacts_root=Path(directory),
         ).solve(problem)
         if not result.success or len(result.formalization_attempts) != 2:
@@ -63,6 +73,8 @@ def main() -> None:
         print(f"Natural language: {problem.text}")
         print(f"First Lean error: {first_error.splitlines()[0]}")
         print(f"Repaired theorem: {result.final_theorem}")
+        proof_error = result.proof_result.attempts[0].verification.compiler_feedback
+        print(f"First proof error: {proof_error.splitlines()[0]}")
         print(f"Verified proof: {result.verified_proof}")
 
 

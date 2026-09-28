@@ -23,6 +23,8 @@ autoformalizations/
 formalization_evaluations/
 equivalence_checks/
 experiments/*/artifacts/
+/e/
+/experiments/*/
 .env
 .env.*
 !.env.example
